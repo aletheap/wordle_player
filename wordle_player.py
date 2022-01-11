@@ -19,8 +19,6 @@ from collections import Counter
 import fire
 from tqdm import tqdm
 
-DATA_URL = "https://bert.org/assets/posts/wordle/words.json"
-
 
 class WordlePlayer:
     green = "🟩"
@@ -198,15 +196,15 @@ def make_hist(scores, hist_width=20):
 
 
 def main(num_games=None, num_threads=None, output_file="wordle_results.txt"):
-    if not os.path.exists("words.json"):
-        print("Downloading words.json...")
-        urllib.request.urlretrieve(DATA_URL, "words.json")
 
-    with open("words.json", "r") as f:
+    # Load all Wordle words. Source: "https://bert.org/assets/posts/wordle/words.json"
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    data_file = os.path.join(dir_path, "words.json")
+    with open(data_file, "r") as f:
         data = json.load(f)
-
     solutions = data["solutions"]
     all_valid_words = sorted(list(set(solutions) | set(data["herrings"])))
+
     num_games = num_games or len(solutions)
 
     t0 = time.time()
