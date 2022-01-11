@@ -1,8 +1,9 @@
 # wordle_player
-Code that plays Wordle 
+Code that plays [Wordle](https://www.powerlanguage.co.uk/wordle/) 
 
 ```sh
 pip install -r requirements.txt
 
 python ./wordle_player.py --help
 ```
+Inspired by: [The Best Starting Word in Wordle](https://bert.org/2021/11/24/the-best-starting-word-in-wordle/)
