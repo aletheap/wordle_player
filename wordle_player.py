@@ -212,9 +212,9 @@ def draw_guesses_hist(ax, results):
     ax.hist(
         x,
         orientation="horizontal",
-        bins=range(1, 7),
-        rwidth=0.8,
-        density=True,
+        bins=range(0, 8),
+        rwidth=0.9,
+        # density=True,
         align="left",
         color="black",
     )
@@ -222,16 +222,28 @@ def draw_guesses_hist(ax, results):
     ax.set_ylim(0, 7)
     ax.set_ylabel("guesses")
     ax.set_xlabel("games")
-    # ax.set_xlim(0, 1)
-    ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
+    # ax.set_xlim(0, len(x))
+    # ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
 
     avg_guesses = sum(x) / len(x)
     ax.set_title("Average: {:.1f} guesses per game".format(avg_guesses))
+    ax.invert_yaxis()
 
 
 def draw_games_per_sec(ax, progress_tracker):
-    x = [p[0] for p in progress_tracker]
-    y = [p[1] for p in progress_tracker]
+
+    x = [0]
+    y = [0]
+    prev_secs = 0
+    prev_total = 0
+    for secs, total in progress_tracker:
+        if (total > prev_total) and (secs - prev_secs >= 1):
+            x.append(secs)
+            y.append((total - prev_total) / (secs - prev_secs))
+            prev_secs = secs
+            prev_total = total
+    # x = [p[0] for p in progress_tracker]
+    # y = [p[1] for p in progress_tracker]
     total_games = progress_tracker[-1][1]
     total_seconds = progress_tracker[-1][0]
     speed = total_games / total_seconds
@@ -239,7 +251,7 @@ def draw_games_per_sec(ax, progress_tracker):
     ax.plot(x, y, color="black")
     # ax.set_yticks(range(1, 7))
     # ax.set_ylim(0, 7)
-    # ax.set_xlim(0, 1)
+    ax.set_xlim(0, x[-1])
     # ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
 
     # avg_guesses = sum(x) / len(x)
@@ -247,7 +259,7 @@ def draw_games_per_sec(ax, progress_tracker):
         f"Played {total_games} games in {total_seconds:.1f} seconds ({speed:.1f} games/sec)"
     )
     ax.set_xlabel("seconds")
-    ax.set_ylabel("games played")
+    ax.set_ylabel("games / sec")
 
 
 def draw_wins_losses(ax, results):
@@ -261,11 +273,12 @@ def draw_wins_losses(ax, results):
 
     ax.barh([1], [wins], label="Wins", color="limegreen")
     ax.barh([1], [losses], left=wins, label="Losses", color="red")
-    # ax.set_ylabel("wins/losses")
-    ax.set_title(f"Won {wins} games ({win_pct:.1f}%)    Lost {losses} games ({loss_pct:.1f}%)")
+    ax.set_ylabel("win / loss")
+    ax.set_xlabel("games")
+    ax.set_title(f"Won {wins} games ({win_pct:.1f}%)  /  Lost {losses} games ({loss_pct:.1f}%)")
     ax.set_yticks([])
     ax.set_xticks(range(0, total_games + 1, total_games // 10))
-    ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=total_games))
+    # ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=total_games))
     ax.set_xlim(0, total_games)
 
 
@@ -291,97 +304,67 @@ def drawgame(ax, wordle_number, mat):
     # ax.axis(colors='w')
 
 
-def save_results(results, progress_tracker, output_file, aspect_ratio=1.6, mobile_friendly=False):
-    sys.stdout.write("\nSaving results to {}\n".format(output_file))
-    results = sorted(results, key=lambda x: x["wordle_number"])
-    total_games = len(results)
-    total_wins = len([r for r in results if r["won"]])
-    loss_indices = ", ".join([str(r["wordle_number"]) for r in results if not r["won"]])
-    num_seconds = progress_tracker[-1][0]
+def save_stats(results, progress_tracker, output_file="wordle_stats.png"):
+    print(f"Saving stats to {output_file}", flush=True)
 
-    avg_guesses = sum([r["guesses"] for r in results]) / total_games
-    pct_wins = 100 * (total_wins / total_games)
-    pct_losses = 100 - pct_wins
-
-    # formatted_results = ""
-
-    # formatted_results += "Wordle Game Stats:\n"
-    # formatted_results += "\n"
-    # formatted_results += f"Played: {total_games} games\n"
-    # formatted_results += f"Time:   {num_seconds:.1f} seconds\n"
-    # formatted_results += f"Speed:  {total_games / num_seconds:.1f} games/s\n"
-    # formatted_results += f"Wins:   {total_wins} ({pct_wins:.1f}%)\n"
-    # formatted_results += (
-    #    f"Losses: {total_games - total_wins} ({pct_losses:.1f}%) - (games: {loss_indices})\n"
-    # )
-
-    # formatted_results += "\n"
-    # formatted_results += f"Avg Guesses: {avg_guesses:.01f} / game\n"
-    # scores = Counter([r["guesses"] for r in results])
-    # formatted_results += draw_guesses_hist(scores.most_common()) + "\n"
-    # formatted_results += "\n\n\n"
-
-    # color_grids = [(x["wordle_number"], x["guesses"], x["color_grid"]) for x in results]
-
-    # height * width = num_games
-    # width = height * aspect_ratio
-    # height = width / aspect_ratio
-    # width * (width / aspect_ratio) = num_games
-    # width = sqrt(num_games * aspect_ratio)
-    width = math.ceil(math.sqrt(total_games * aspect_ratio))
-    if mobile_friendly:
-        width = 4
-    # while width % 3 != 0:
-    #    width += 1
-    height = math.floor(width / aspect_ratio) + 3
-    fig = plt.figure(figsize=(width * 2, height * 2 + 2))
-    grid = plt.GridSpec(height, width)  # , wspace=0.4, hspace=0.3)
-
-    stat_width = min(width, 4)
+    fig = plt.figure(figsize=(6, 6))
+    grid = plt.GridSpec(3, 3)  # , wspace=0.4, hspace=0.3)
     # wins, losses
-    ax = fig.add_subplot(grid[0, :stat_width])
+    ax = fig.add_subplot(grid[2, :3])
     draw_wins_losses(ax, results)
 
     # add histogram of tries
-    ax = fig.add_subplot(grid[1, :stat_width])
+    ax = fig.add_subplot(grid[1, :3])
     draw_guesses_hist(ax, results)
 
     # draw games per second
-    ax = fig.add_subplot(grid[2, :stat_width])
+    ax = fig.add_subplot(grid[0, :3])
     draw_games_per_sec(ax, progress_tracker)
 
-    # add game results
+    fig.suptitle("Wordle Player Stats")
+    plt.tight_layout()
+    fig.savefig(output_file)
+    print(f"Saved stats to {output_file}", flush=True)
+
+
+def save_results(
+    results,
+    output_file="wordle_grids.png",
+    aspect_ratio=1.6,
+    mobile_friendly=False,
+):
+    print(f"Saving grids to {output_file}", flush=True)
+    results = sorted(results, key=lambda x: x["wordle_number"])
+
+    total_games = len(results)
+    width = math.ceil(math.sqrt(total_games * aspect_ratio))
+    if mobile_friendly:
+        width = 16
+    height = math.ceil(total_games / width)
+    print(f"{height=}", flush=True)
+    print(f"{width=}", flush=True)
+
+    fig = plt.figure(figsize=(width * 2, height * 2))
+    grid = plt.GridSpec(height, width)  # , wspace=0.4, hspace=0.3)
+
     for i, r in enumerate(results):
-        ax = fig.add_subplot(grid[(i // width) + 3, i % width])
+        # print(f"{i=}", flush=True)
+        grid_x = i % width
+        grid_y = i // width
+        # print(f"grid_args = ({grid_y}, {grid_x})", flush=True)
+        ax = fig.add_subplot(grid[grid_y, grid_x])
         drawgame(ax, r["wordle_number"], r["color_grid"])
-    # fig.suptitle(formatted_results)
-    fig.suptitle("Alethea's Wordle Player Stats\n\n")
     plt.tight_layout()
     fig.savefig(output_file)
     plt.close()
-    sys.stdout.write("Results saved to {}\n".format(output_file))
-    # i = 0
-    # while i < len(color_grids):
-    #    batch = color_grids[i : i + width]
-    #    batch = [item.split("\n") for item in batch]
-    #    for item in batch:
-    #        while len(item) < 8:
-    #            item += ["_" * 5]
-    #        for j in range(len(item)):
-    #            item[j] = item[j].strip().ljust(14)
-    #    for line in range(8):
-    #        for item in batch:
-    #            formatted_results += item[line]
-    #        formatted_results += "\n"
-    #    formatted_results += "\n"
-    #    i += width
-    # return formatted_results
+    print(f"Saved grids to {output_file}", flush=True)
 
 
 def main(
     num_games=None,
     num_threads=None,
-    output_file="wordle_results.png",
+    output_file="wordle_grids.png",
+    stats_file="wordle_stats.png",
     max_vocab_size=100_000,
     debug=False,
     mobile_friendly=False,
@@ -443,11 +426,11 @@ def main(
             results.append(x.get())
         # results = [x.get() for x in r]
 
-    save_results(results, progress_tracker, output_file, mobile_friendly=mobile_friendly)
+    save_stats(results, progress_tracker, stats_file)
+    save_results(results, output_file, mobile_friendly=mobile_friendly)
     # with open(output_file, "w") as f:
     #    f.write(format_results(results, num_seconds))
     # sys.stderr.flush()
-    print("\nResults written to " + output_file)
 
 
 if __name__ == "__main__":
