@@ -279,7 +279,7 @@ def draw_wins_losses(ax, results):
     # ax.matshow(np.expand_dims(x, 0), cmap=cmap, aspect="auto")
     ax.set_ylabel("win / loss")
     ax.set_xlabel("games")
-    ax.set_title(f"Won {wins} games ({win_pct:.1f}%)  /  Lost {losses} games ({loss_pct:.1f}%)")
+    ax.set_title(f"Won {wins:.0f} of {total_games:.0f} games ({win_pct:.1f}%)")
     ax.set_yticks([])
     ax.set_xticks(range(0, total_games + 1, total_games // 10))
     # ax.set_xticks(x_ticks)
