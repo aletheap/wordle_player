@@ -323,17 +323,17 @@ def save_stats(results, progress_tracker, output_file="wordle_stats.png"):
     fig = plt.figure(figsize=(grid_w * 2, grid_h * 2))
     grid = plt.GridSpec(grid_h, grid_w)  # , wspace=0.4, hspace=0.3)
 
-    # draw games per second
+    # wins, losses
     ax = fig.add_subplot(grid[0, :grid_w])
-    draw_games_per_sec(ax, progress_tracker)
+    draw_wins_losses(ax, results)
 
     # add histogram of tries
     ax = fig.add_subplot(grid[1, :grid_w])
     draw_guesses_hist(ax, results)
 
-    # wins, losses
+    # draw games per second
     ax = fig.add_subplot(grid[2, :grid_w])
-    draw_wins_losses(ax, results)
+    draw_games_per_sec(ax, progress_tracker)
 
     fig.suptitle("Wordle Player Stats")
     plt.tight_layout()
