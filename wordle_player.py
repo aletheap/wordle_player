@@ -181,6 +181,7 @@ class WordlePlayer:
             }
             if output["won"]:
                 break
+        output["time"] = time.time()
         return output
 
     # def play_interactive(self):
@@ -264,22 +265,28 @@ def draw_games_per_sec(ax, progress_tracker):
 
 def draw_wins_losses(ax, results):
     total_games = len(results)
-    x = [r["won"] for r in results]
-    wins = len([r for r in results if r["won"]])
-    losses = total_games - wins
-    win_pct = 100 * wins / total_games
-    loss_pct = 100 - win_pct
+    x = np.array([float(r["won"]) for r in results])
+    # x_ticks = np.where(x == 0)[0]
+    # print(f"{x_ticks=}")
+    wins = x.sum()
+    losses = (1 - x).sum()
+    win_pct = x.mean() * 100
+    loss_pct = (1 - x).mean() * 100
     cmap = ListedColormap(["red", "limegreen"])
 
     ax.barh([1], [wins], label="Wins", color="limegreen")
     ax.barh([1], [losses], left=wins, label="Losses", color="red")
+    # ax.matshow(np.expand_dims(x, 0), cmap=cmap, aspect="auto")
     ax.set_ylabel("win / loss")
     ax.set_xlabel("games")
     ax.set_title(f"Won {wins} games ({win_pct:.1f}%)  /  Lost {losses} games ({loss_pct:.1f}%)")
     ax.set_yticks([])
     ax.set_xticks(range(0, total_games + 1, total_games // 10))
-    # ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=total_games))
+    # ax.set_xticks(x_ticks)
+    # ax.set_xticklabels([])
+    ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=total_games))
     ax.set_xlim(0, total_games)
+    ax.xaxis.set_ticks_position("bottom")
 
 
 def drawgame(ax, wordle_number, mat):
@@ -287,10 +294,14 @@ def drawgame(ax, wordle_number, mat):
     vmin = 1
     vmax = 3
     tries = len(mat)
+    title = f"Wordle {wordle_number} {tries}/6"
+    if min(mat[-1]) == 3:
+        title_color = "black"
+    else:
+        title_color = "red"
 
     ax.matshow(mat, vmin=vmin, vmax=vmax, cmap=cmap)
-
-    ax.set_title(f"Wordle {wordle_number} {tries}/6")
+    ax.set_title(f"Wordle {wordle_number} {tries}/6", color=title_color)
     ax.tick_params(axis="x", colors="w")
     ax.tick_params(axis="y", colors="w")
     ax.set_xticklabels([])
@@ -307,19 +318,22 @@ def drawgame(ax, wordle_number, mat):
 def save_stats(results, progress_tracker, output_file="wordle_stats.png"):
     print(f"Saving stats to {output_file}", flush=True)
 
-    fig = plt.figure(figsize=(6, 6))
-    grid = plt.GridSpec(3, 3)  # , wspace=0.4, hspace=0.3)
-    # wins, losses
-    ax = fig.add_subplot(grid[2, :3])
-    draw_wins_losses(ax, results)
-
-    # add histogram of tries
-    ax = fig.add_subplot(grid[1, :3])
-    draw_guesses_hist(ax, results)
+    grid_h = 3
+    grid_w = 3
+    fig = plt.figure(figsize=(grid_w * 2, grid_h * 2))
+    grid = plt.GridSpec(grid_h, grid_w)  # , wspace=0.4, hspace=0.3)
 
     # draw games per second
-    ax = fig.add_subplot(grid[0, :3])
+    ax = fig.add_subplot(grid[0, :grid_w])
     draw_games_per_sec(ax, progress_tracker)
+
+    # add histogram of tries
+    ax = fig.add_subplot(grid[1, :grid_w])
+    draw_guesses_hist(ax, results)
+
+    # wins, losses
+    ax = fig.add_subplot(grid[2, :grid_w])
+    draw_wins_losses(ax, results)
 
     fig.suptitle("Wordle Player Stats")
     plt.tight_layout()
@@ -402,29 +416,39 @@ def main(
 
     num_games = num_games or len(solutions)
 
-    t0 = time.time()
-    m = mp.Manager()
-    q = m.Queue()
-
     if debug:
-        play_game(1, solutions, word_freqs, q)
-        return
+        with open(os.path.join(dir_path, "results.json")) as f:
+            results = json.load(f)
+        with open(os.path.join(dir_path, "progress_tracker.json")) as f:
+            progress_tracker = json.load(f)
+    else:
+        t0 = time.time()
+        m = mp.Manager()
+        q = m.Queue()
 
-    with mp.Pool(num_threads) as p:
-        r = [p.apply_async(play_game, (i, solutions, word_freqs, q)) for i in range(num_games)]
-        finished = 0
-        progress_tracker = []
-        with tqdm(total=num_games, unit="game(s)") as pb:
-            while finished < num_games:
-                new_finished = len([1 for x in r if x.ready()])
-                progress_tracker.append((time.time() - t0, new_finished))
-                pb.update(new_finished - finished)
-                finished = new_finished
-        progress_tracker.append((time.time() - t0, num_games))
-        results = []
-        for x in r:
-            results.append(x.get())
-        # results = [x.get() for x in r]
+        # if debug:
+        #    play_game(1, solutions, word_freqs, q)
+        #    return
+
+        with mp.Pool(num_threads) as p:
+            r = [p.apply_async(play_game, (i, solutions, word_freqs, q)) for i in range(num_games)]
+            finished = 0
+            progress_tracker = []
+            with tqdm(total=num_games, unit="game(s)") as pb:
+                while finished < num_games:
+                    new_finished = len([1 for x in r if x.ready()])
+                    progress_tracker.append((time.time() - t0, new_finished))
+                    pb.update(new_finished - finished)
+                    finished = new_finished
+            progress_tracker.append((time.time() - t0, num_games))
+            # results = []
+            # for x in r:
+            #    results.append(x.get())
+            results = [x.get() for x in r]
+            with open(os.path.join(dir_path, "results.json"), "w") as f:
+                json.dump(results, f)
+            with open(os.path.join(dir_path, "progress_tracker.json"), "w") as f:
+                json.dump(progress_tracker, f)
 
     save_stats(results, progress_tracker, stats_file)
     save_results(results, output_file, mobile_friendly=mobile_friendly)
