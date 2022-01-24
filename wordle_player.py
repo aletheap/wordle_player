@@ -7,28 +7,35 @@
 # Wordle: https://www.powerlanguage.co.uk/wordle/
 
 import json
+import math
 import multiprocessing as mp
 import os
 import re
 import string
 import sys
 import time
-import urllib.request
 from collections import Counter
 
 import fire
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
+from matplotlib.colors import ListedColormap
 from tqdm import tqdm
 
 
 class WordlePlayer:
-    green = "🟩"
-    black = "⬛"
-    yellow = "🟨"
+    black = 1
+    yellow = 2
+    green = 3
+    # green = "🟩"
+    # yellow = "🟨"
+    # black = "⬛"
 
-    def __init__(self, wordle_number, solutions, all_valid_words, wordlen=5):
+    def __init__(self, wordle_number, solutions, word_freqs, wordlen=5):
         self.wordle_number = wordle_number
         self.solutions = solutions
-        self.all_valid_words = all_valid_words
+        self.word_freqs = self._process_word_freqs(word_freqs)
         self.wordlen = wordlen
 
         self._solution = self.solutions[wordle_number]
@@ -43,6 +50,11 @@ class WordlePlayer:
             self.chars.append({"no": set([]), "yes": None})
 
         self._update()
+
+    def _process_word_freqs(self, word_freqs):
+        # normalize the frequencies
+        total = sum([w[1] for w in word_freqs.items()])
+        return {w[0]: w[1] / total for w in word_freqs.items()}
 
     def _update(self):
         self.regexes = self._update_regexes()
@@ -73,14 +85,17 @@ class WordlePlayer:
         return True
 
     def _filter_words(self):
-        return [w for w in self.all_valid_words if self._matches_all_regexes(w)]
+        return [w for w in self.word_freqs if self._matches_all_regexes(w)]
 
     def _score_letters(self):
         letter_scores = {}
         for letter in string.ascii_lowercase:
             for pos in range(self.wordlen):
                 score = len([w for w in self.filtered_words if w[pos] == letter])
-                letter_scores[(pos, letter)] = score
+                freq_score = sum(
+                    [self.word_freqs[w] for w in self.filtered_words if w[pos] == letter]
+                )
+                letter_scores[(pos, letter)] = score * freq_score
         return letter_scores
 
     def _score_one_word(self, word):
@@ -112,25 +127,31 @@ class WordlePlayer:
             self.chars[position]["no"].add(letter)
 
     def add_result(self, word, result):
-        color_line = ""
+        # color_line = ""
+        color_line = []
         for i, r in enumerate(result):
             f = {"c": self.correct, "p": self.wrong_position, "n": self.not_in_word}[r]
             f(word[i], i)
-            color_line += {"c": self.green, "p": self.yellow, "n": self.black}[r]
+            color_line.append({"c": self.green, "p": self.yellow, "n": self.black}[r])
 
+        # color_line += " " * blacks
         self.color_lines.append(color_line)
         if result == "".join(["c"] * len(word)):
             self.won_game = True
 
     def next_word(self):
         self._update()
-        return self.word_scores[0][1]
+        if len(self.word_scores) > 0:
+            return self.word_scores[0][1]
+        else:
+            return None
 
     def get_color_grid(self):
-        text = "Wordle {} {}/6\n\n".format(self.wordle_number, len(self.color_lines))
-        text += "\n".join(self.color_lines)
-        text += "\n"
-        return text
+        # text = "Wordle {} {}/6\n\n".format(self.wordle_number, len(self.color_lines))
+        # text += "\n".join(self.color_lines)
+        # text += "\n"
+        # return text
+        return self.color_lines
 
     def guess(self, word):
         s = self._solution
@@ -148,11 +169,15 @@ class WordlePlayer:
 
     def play(self):
         for trie in range(1, 7):
-            self.guess(self.next_word())
+            next_word = self.next_word()
+            if next_word is None:
+                break
+            self.guess(next_word)
             output = {
                 "won": self.won_game,
                 "guesses": trie,
                 "color_grid": self.get_color_grid(),
+                "wordle_number": self.wordle_number,
             }
             if output["won"]:
                 break
@@ -175,76 +200,253 @@ class WordlePlayer:
     #    print(self.get_color_grid())
 
 
-def play_game(wordle_number, solutions, all_valid_words, results_q):
-    output = WordlePlayer(wordle_number, solutions, all_valid_words).play()
+def play_game(wordle_number, solutions, word_freqs, results_q):
+    output = WordlePlayer(wordle_number, solutions, word_freqs).play()
     results_q.put(output)
     return output
 
 
-def make_hist(scores, hist_width=20):
-    scores = {k: v for k, v in scores}
-    max_guesses = max(scores.keys())
-    max_games = max(scores.values())
-    total_games = sum(scores.values())
-    scaled_scores = {k: round(hist_width * v / max_games) for k, v in scores.items()}
-    pct_scores = {k: 100 * v / total_games for k, v in scores.items()}
-    hist_lines = []
-    for i in range(1, max_guesses + 1):
-        pct = f"({pct_scores.get(i, 0):.1f}%)".rjust(7, " ")
-        hist_lines.append(f"{i:2} {pct} | " + "*" * scaled_scores.get(i, 0))
-    return "\n".join(hist_lines)
+def draw_guesses_hist(ax, results):
+    x = [r["guesses"] for r in results]
+
+    ax.hist(
+        x,
+        orientation="horizontal",
+        bins=range(1, 7),
+        rwidth=0.8,
+        density=True,
+        align="left",
+        color="black",
+    )
+    ax.set_yticks(range(1, 7))
+    ax.set_ylim(0, 7)
+    ax.set_ylabel("guesses")
+    ax.set_xlabel("games")
+    # ax.set_xlim(0, 1)
+    ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
+
+    avg_guesses = sum(x) / len(x)
+    ax.set_title("Average: {:.1f} guesses per game".format(avg_guesses))
 
 
-def main(num_games=None, num_threads=None, output_file="wordle_results.txt"):
+def draw_games_per_sec(ax, progress_tracker):
+    x = [p[0] for p in progress_tracker]
+    y = [p[1] for p in progress_tracker]
+    total_games = progress_tracker[-1][1]
+    total_seconds = progress_tracker[-1][0]
+    speed = total_games / total_seconds
+
+    ax.plot(x, y, color="black")
+    # ax.set_yticks(range(1, 7))
+    # ax.set_ylim(0, 7)
+    # ax.set_xlim(0, 1)
+    # ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
+
+    # avg_guesses = sum(x) / len(x)
+    ax.set_title(
+        f"Played {total_games} games in {total_seconds:.1f} seconds ({speed:.1f} games/sec)"
+    )
+    ax.set_xlabel("seconds")
+    ax.set_ylabel("games played")
+
+
+def draw_wins_losses(ax, results):
+    total_games = len(results)
+    x = [r["won"] for r in results]
+    wins = len([r for r in results if r["won"]])
+    losses = total_games - wins
+    win_pct = 100 * wins / total_games
+    loss_pct = 100 - win_pct
+    cmap = ListedColormap(["red", "limegreen"])
+
+    ax.barh([1], [wins], label="Wins", color="limegreen")
+    ax.barh([1], [losses], left=wins, label="Losses", color="red")
+    # ax.set_ylabel("wins/losses")
+    ax.set_title(f"Won {wins} games ({win_pct:.1f}%)    Lost {losses} games ({loss_pct:.1f}%)")
+    ax.set_yticks([])
+    ax.set_xticks(range(0, total_games + 1, total_games // 10))
+    ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=total_games))
+    ax.set_xlim(0, total_games)
+
+
+def drawgame(ax, wordle_number, mat):
+    cmap = ListedColormap(["black", "gold", "limegreen"])
+    vmin = 1
+    vmax = 3
+    tries = len(mat)
+
+    ax.matshow(mat, vmin=vmin, vmax=vmax, cmap=cmap)
+
+    ax.set_title(f"Wordle {wordle_number} {tries}/6")
+    ax.tick_params(axis="x", colors="w")
+    ax.tick_params(axis="y", colors="w")
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.xaxis.label.set_color("white")
+    ax.yaxis.label.set_color("white")
+
+    ax.set_xticks(np.arange(-0.5, 5, 1), colors="w")
+    ax.set_yticks(np.arange(-0.5, 6, 1), colors="w")
+    ax.grid(color="white", linestyle="-", linewidth=2)
+    # ax.axis(colors='w')
+
+
+def save_results(results, progress_tracker, output_file, aspect_ratio=1.6, mobile_friendly=False):
+    sys.stdout.write("\nSaving results to {}\n".format(output_file))
+    results = sorted(results, key=lambda x: x["wordle_number"])
+    total_games = len(results)
+    total_wins = len([r for r in results if r["won"]])
+    loss_indices = ", ".join([str(r["wordle_number"]) for r in results if not r["won"]])
+    num_seconds = progress_tracker[-1][0]
+
+    avg_guesses = sum([r["guesses"] for r in results]) / total_games
+    pct_wins = 100 * (total_wins / total_games)
+    pct_losses = 100 - pct_wins
+
+    # formatted_results = ""
+
+    # formatted_results += "Wordle Game Stats:\n"
+    # formatted_results += "\n"
+    # formatted_results += f"Played: {total_games} games\n"
+    # formatted_results += f"Time:   {num_seconds:.1f} seconds\n"
+    # formatted_results += f"Speed:  {total_games / num_seconds:.1f} games/s\n"
+    # formatted_results += f"Wins:   {total_wins} ({pct_wins:.1f}%)\n"
+    # formatted_results += (
+    #    f"Losses: {total_games - total_wins} ({pct_losses:.1f}%) - (games: {loss_indices})\n"
+    # )
+
+    # formatted_results += "\n"
+    # formatted_results += f"Avg Guesses: {avg_guesses:.01f} / game\n"
+    # scores = Counter([r["guesses"] for r in results])
+    # formatted_results += draw_guesses_hist(scores.most_common()) + "\n"
+    # formatted_results += "\n\n\n"
+
+    # color_grids = [(x["wordle_number"], x["guesses"], x["color_grid"]) for x in results]
+
+    # height * width = num_games
+    # width = height * aspect_ratio
+    # height = width / aspect_ratio
+    # width * (width / aspect_ratio) = num_games
+    # width = sqrt(num_games * aspect_ratio)
+    width = math.ceil(math.sqrt(total_games * aspect_ratio))
+    if mobile_friendly:
+        width = 4
+    # while width % 3 != 0:
+    #    width += 1
+    height = math.floor(width / aspect_ratio) + 3
+    fig = plt.figure(figsize=(width * 2, height * 2 + 2))
+    grid = plt.GridSpec(height, width)  # , wspace=0.4, hspace=0.3)
+
+    stat_width = min(width, 4)
+    # wins, losses
+    ax = fig.add_subplot(grid[0, :stat_width])
+    draw_wins_losses(ax, results)
+
+    # add histogram of tries
+    ax = fig.add_subplot(grid[1, :stat_width])
+    draw_guesses_hist(ax, results)
+
+    # draw games per second
+    ax = fig.add_subplot(grid[2, :stat_width])
+    draw_games_per_sec(ax, progress_tracker)
+
+    # add game results
+    for i, r in enumerate(results):
+        ax = fig.add_subplot(grid[(i // width) + 3, i % width])
+        drawgame(ax, r["wordle_number"], r["color_grid"])
+    # fig.suptitle(formatted_results)
+    fig.suptitle("Alethea's Wordle Player Stats\n\n")
+    plt.tight_layout()
+    fig.savefig(output_file)
+    plt.close()
+    sys.stdout.write("Results saved to {}\n".format(output_file))
+    # i = 0
+    # while i < len(color_grids):
+    #    batch = color_grids[i : i + width]
+    #    batch = [item.split("\n") for item in batch]
+    #    for item in batch:
+    #        while len(item) < 8:
+    #            item += ["_" * 5]
+    #        for j in range(len(item)):
+    #            item[j] = item[j].strip().ljust(14)
+    #    for line in range(8):
+    #        for item in batch:
+    #            formatted_results += item[line]
+    #        formatted_results += "\n"
+    #    formatted_results += "\n"
+    #    i += width
+    # return formatted_results
+
+
+def main(
+    num_games=None,
+    num_threads=None,
+    output_file="wordle_results.png",
+    max_vocab_size=100_000,
+    debug=False,
+    mobile_friendly=False,
+):
 
     # Load all Wordle words. Source: "https://bert.org/assets/posts/wordle/words.json"
     dir_path = os.path.dirname(os.path.realpath(__file__))
+
     data_file = os.path.join(dir_path, "words.json")
     with open(data_file, "r") as f:
         data = json.load(f)
     solutions = data["solutions"]
-    all_valid_words = sorted(list(set(solutions) | set(data["herrings"])))
+    herrings = set(data["herrings"])
+    all_valid_words = set(solutions) | herrings
+
+    with open(os.path.join(dir_path, "word_freqs.json"), "r") as f:
+        word_freqs = json.load(f)
+
+    word_freqs = sorted(word_freqs.items(), key=lambda x: x[1], reverse=True)
+
+    # wordle will not allow words other than solutions or herrings so we should
+    # enforce the same behavior:
+    word_freqs = {k: v for k, v in word_freqs[:max_vocab_size] if k in all_valid_words}
+
+    print(f"{len(word_freqs)=}")
+    print(f"{len(solutions)=}")
+    print(f"{len(herrings)=}")
+    print(f"{len(all_valid_words)=}")
+    print(f"{len(all_valid_words - set(word_freqs.keys()))=}")
+    print(f"{len(set(solutions) - set(word_freqs.keys()))=}")
+    # print(f"{solutions - set(word_freqs.keys())=}")
+    # assert len(all_valid_words) == len(
+    #    set(word_freqs.keys()) & all_valid_words
+    # ), "Some words are not in the word list"
 
     num_games = num_games or len(solutions)
 
     t0 = time.time()
     m = mp.Manager()
     q = m.Queue()
+
+    if debug:
+        play_game(1, solutions, word_freqs, q)
+        return
+
     with mp.Pool(num_threads) as p:
-        r = [p.apply_async(play_game, (i, solutions, all_valid_words, q)) for i in range(num_games)]
+        r = [p.apply_async(play_game, (i, solutions, word_freqs, q)) for i in range(num_games)]
         finished = 0
+        progress_tracker = []
         with tqdm(total=num_games, unit="game(s)") as pb:
-            while finished < len(r):
+            while finished < num_games:
                 new_finished = len([1 for x in r if x.ready()])
+                progress_tracker.append((time.time() - t0, new_finished))
                 pb.update(new_finished - finished)
                 finished = new_finished
-        results = [x.get() for x in r]
-    t1 = time.time()
-    num_seconds = t1 - t0
+        progress_tracker.append((time.time() - t0, num_games))
+        results = []
+        for x in r:
+            results.append(x.get())
+        # results = [x.get() for x in r]
 
-    total_games = len(results)
-    total_wins = len([r for r in results if r["won"]])
-    avg_guesses = sum([r["guesses"] for r in results]) / total_games
-    pct_wins = 100 * (total_wins / total_games)
-    pct_losses = 100 - pct_wins
-
-    with open(output_file, "w") as f:
-        f.write("Wordle Game Stats:\n")
-        f.write("\n")
-        f.write(f"Played: {num_games} games\n")
-        f.write(f"Time:   {num_seconds:.1f} seconds\n")
-        f.write(f"Speed:  {num_games / num_seconds:.1f} games/s\n")
-        f.write(f"Wins:   {total_wins} ({pct_wins:.1f}%)\n")
-        f.write(f"Losses: {total_games - total_wins} ({pct_losses:.1f}%)\n")
-        f.write("\n")
-        f.write(f"Avg Guesses: {avg_guesses:.01f} / game\n")
-        scores = Counter([r["guesses"] for r in results])
-        f.write(make_hist(scores.most_common()) + "\n")
-        f.write("\n\n\n")
-        color_grids = [x["color_grid"] for x in results]
-        for c in color_grids:
-            f.write(c + "\n")
-    sys.stderr.flush()
+    save_results(results, progress_tracker, output_file, mobile_friendly=mobile_friendly)
+    # with open(output_file, "w") as f:
+    #    f.write(format_results(results, num_seconds))
+    # sys.stderr.flush()
     print("\nResults written to " + output_file)
 
 
