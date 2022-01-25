@@ -14,7 +14,7 @@ import re
 import string
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 
 import fire
 import matplotlib.pyplot as plt
@@ -22,6 +22,8 @@ import matplotlib.ticker as ticker
 import numpy as np
 from matplotlib.colors import ListedColormap
 from tqdm import tqdm
+
+MY_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class WordlePlayer:
@@ -35,7 +37,7 @@ class WordlePlayer:
     def __init__(self, wordle_number, solutions, word_freqs, wordlen=5):
         self.wordle_number = wordle_number
         self.solutions = solutions
-        self.word_freqs = self._process_word_freqs(word_freqs)
+        self.word_freqs = word_freqs
         self.wordlen = wordlen
 
         self._solution = self.solutions[wordle_number]
@@ -50,11 +52,6 @@ class WordlePlayer:
             self.chars.append({"no": set([]), "yes": None})
 
         self._update()
-
-    def _process_word_freqs(self, word_freqs):
-        # normalize the frequencies
-        total = sum([w[1] for w in word_freqs.items()])
-        return {w[0]: w[1] / total for w in word_freqs.items()}
 
     def _update(self):
         self.regexes = self._update_regexes()
@@ -88,26 +85,16 @@ class WordlePlayer:
         return [w for w in self.word_freqs if self._matches_all_regexes(w)]
 
     def _score_letters(self):
-        letter_scores = {}
-        for letter in string.ascii_lowercase:
-            for pos in range(self.wordlen):
-                score = len([w for w in self.filtered_words if w[pos] == letter])
-                freq_score = sum(
-                    [self.word_freqs[w] for w in self.filtered_words if w[pos] == letter]
-                )
-                letter_scores[(pos, letter)] = score * freq_score
+        letter_counter = Counter([(i, l) for w in self.filtered_words for i, l in enumerate(w)])
+        letter_scores = dict(letter_counter)
+        M = max(letter_scores.values())
+        letter_scores = {k: v / M for k, v in letter_scores.items()}
         return letter_scores
 
     def _score_one_word(self, word):
-        score = 0
-        for i, letter in enumerate(word):
-            score += self.letter_scores[(i, letter)]
-        score = score / len(word)
-        score = score - (5 - len(set(word)))
-        uniq_chars = len(set([c for c in word]))
-        uniq_score = uniq_chars / len(word)
-        score = score * uniq_score
-        return score
+        avg_letter_score = sum([self.letter_scores[x] for x in enumerate(word)]) / self.wordlen
+        unique_letters = len(set(word))
+        return (avg_letter_score * unique_letters) + self.word_freqs[word]
 
     def _score_words(self):
         return list(reversed(sorted([(self._score_one_word(w), w) for w in self.filtered_words])))
@@ -130,13 +117,13 @@ class WordlePlayer:
         # color_line = ""
         color_line = []
         for i, r in enumerate(result):
-            f = {"c": self.correct, "p": self.wrong_position, "n": self.not_in_word}[r]
+            f = {"G": self.correct, "Y": self.wrong_position, "B": self.not_in_word}[r]
             f(word[i], i)
-            color_line.append({"c": self.green, "p": self.yellow, "n": self.black}[r])
+            color_line.append({"G": self.green, "Y": self.yellow, "B": self.black}[r])
 
         # color_line += " " * blacks
         self.color_lines.append(color_line)
-        if result == "".join(["c"] * len(word)):
+        if result == "".join(["G"] * len(word)):
             self.won_game = True
 
     def next_word(self):
@@ -147,22 +134,17 @@ class WordlePlayer:
             return None
 
     def get_color_grid(self):
-        # text = "Wordle {} {}/6\n\n".format(self.wordle_number, len(self.color_lines))
-        # text += "\n".join(self.color_lines)
-        # text += "\n"
-        # return text
         return self.color_lines
 
     def guess(self, word):
-        s = self._solution
         result = []
         for i, letter in enumerate(word):
-            if s[i] == letter:
-                result.append("c")
-            elif letter in s:
-                result.append("p")
+            if self._solution[i] == letter:
+                result.append("G")
+            elif letter in self._solution:
+                result.append("Y")
             else:
-                result.append("n")
+                result.append("B")
         result = "".join(result)
         self.add_result(word, result)
         return result
@@ -227,47 +209,40 @@ def draw_guesses_hist(ax, results):
     # ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
 
     avg_guesses = sum(x) / len(x)
-    ax.set_title("Average: {:.1f} guesses per game".format(avg_guesses))
+    title = "Average: {:.1f} guesses per game".format(avg_guesses)
+    ax.set_title(title)
     ax.invert_yaxis()
+    return title
 
 
-def draw_games_per_sec(ax, progress_tracker):
+def draw_games_per_sec(ax, results, bucket_size=1):
+    times = np.array(sorted([x["time"] for x in results]))
+    times = times - times[0]
+    times2 = np.expand_dims(times, 0)
+    time_deltas = times2 - times2.T
+    rates = (time_deltas <= bucket_size) * (time_deltas > 0)
+    rates = rates.sum(0)
 
-    x = [0]
-    y = [0]
-    prev_secs = 0
-    prev_total = 0
-    for secs, total in progress_tracker:
-        if (total > prev_total) and (secs - prev_secs >= 1):
-            x.append(secs)
-            y.append((total - prev_total) / (secs - prev_secs))
-            prev_secs = secs
-            prev_total = total
-    # x = [p[0] for p in progress_tracker]
-    # y = [p[1] for p in progress_tracker]
-    total_games = progress_tracker[-1][1]
-    total_seconds = progress_tracker[-1][0]
+    total_games = len(results)
+    total_seconds = times[-1]
     speed = total_games / total_seconds
 
-    ax.plot(x, y, color="black")
-    # ax.set_yticks(range(1, 7))
-    # ax.set_ylim(0, 7)
-    ax.set_xlim(0, x[-1])
-    # ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
+    x = times
+    y = rates
 
-    # avg_guesses = sum(x) / len(x)
-    ax.set_title(
-        f"Played {total_games} games in {total_seconds:.1f} seconds ({speed:.1f} games/sec)"
-    )
+    ax.plot(x, y, color="black")
+    ax.set_xlim(0, x[-1])
+
+    title = f"Played {total_games} games in {total_seconds:.1f} seconds ({speed:.1f} games/sec)"
+    ax.set_title(title)
     ax.set_xlabel("seconds")
     ax.set_ylabel("games / sec")
+    return title
 
 
 def draw_wins_losses(ax, results):
     total_games = len(results)
     x = np.array([float(r["won"]) for r in results])
-    # x_ticks = np.where(x == 0)[0]
-    # print(f"{x_ticks=}")
     wins = x.sum()
     losses = (1 - x).sum()
     win_pct = x.mean() * 100
@@ -279,7 +254,8 @@ def draw_wins_losses(ax, results):
     # ax.matshow(np.expand_dims(x, 0), cmap=cmap, aspect="auto")
     ax.set_ylabel("win / loss")
     ax.set_xlabel("games")
-    ax.set_title(f"Won {wins:.0f} of {total_games:.0f} games ({win_pct:.1f}%)")
+    title = f"Won {wins:.0f} of {total_games:.0f} games ({win_pct:.1f}%)"
+    ax.set_title(title)
     ax.set_yticks([])
     ax.set_xticks(range(0, total_games + 1, total_games // 10))
     # ax.set_xticks(x_ticks)
@@ -287,6 +263,7 @@ def draw_wins_losses(ax, results):
     ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=total_games))
     ax.set_xlim(0, total_games)
     ax.xaxis.set_ticks_position("bottom")
+    return title
 
 
 def drawgame(ax, wordle_number, mat):
@@ -315,7 +292,7 @@ def drawgame(ax, wordle_number, mat):
     # ax.axis(colors='w')
 
 
-def save_stats(results, progress_tracker, output_file="wordle_stats.png"):
+def save_stats(results, output_file="wordle_stats.png"):
     print(f"Saving stats to {output_file}", flush=True)
 
     grid_h = 3
@@ -325,20 +302,24 @@ def save_stats(results, progress_tracker, output_file="wordle_stats.png"):
 
     # wins, losses
     ax = fig.add_subplot(grid[0, :grid_w])
-    draw_wins_losses(ax, results)
+    wins_str = draw_wins_losses(ax, results)
 
     # add histogram of tries
     ax = fig.add_subplot(grid[1, :grid_w])
-    draw_guesses_hist(ax, results)
+    guesses_str = draw_guesses_hist(ax, results)
 
     # draw games per second
     ax = fig.add_subplot(grid[2, :grid_w])
-    draw_games_per_sec(ax, progress_tracker)
+    speed_str = draw_games_per_sec(ax, results)
 
     fig.suptitle("Wordle Player Stats")
     plt.tight_layout()
     fig.savefig(output_file)
     print(f"Saved stats to {output_file}", flush=True)
+
+    print(wins_str)
+    print(guesses_str)
+    print(speed_str)
 
 
 def save_results(
@@ -374,6 +355,31 @@ def save_results(
     print(f"Saved grids to {output_file}", flush=True)
 
 
+def load_data_files(max_vocab_size=100_000_000):
+
+    # Load all Wordle words. Source: "https://bert.org/assets/posts/wordle/words.json"
+    data_file = os.path.join(MY_DIR, "words.json")
+    with open(data_file, "r") as f:
+        data = json.load(f)
+    solutions = data["solutions"]
+    herrings = set(data["herrings"])
+    all_valid_words = set(solutions) | herrings
+
+    with open(os.path.join(MY_DIR, "word_freqs.json"), "r") as f:
+        word_freqs = json.load(f)
+    word_freqs = sorted(word_freqs.items(), key=lambda x: x[1], reverse=True)
+
+    # wordle will not allow words other than solutions or herrings so we should
+    # enforce the same behavior:
+    word_freqs = {k: v for k, v in word_freqs[:max_vocab_size] if k in all_valid_words}
+
+    # normalize word_freqs
+    max_word_freq = max(word_freqs.values())
+    word_freqs = {k: v / max_word_freq for k, v in word_freqs.items()}
+
+    return word_freqs, solutions
+
+
 def main(
     num_games=None,
     num_threads=None,
@@ -382,45 +388,18 @@ def main(
     max_vocab_size=100_000,
     debug=False,
     mobile_friendly=False,
+    save_grids=False,
 ):
 
-    # Load all Wordle words. Source: "https://bert.org/assets/posts/wordle/words.json"
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-
-    data_file = os.path.join(dir_path, "words.json")
-    with open(data_file, "r") as f:
-        data = json.load(f)
-    solutions = data["solutions"]
-    herrings = set(data["herrings"])
-    all_valid_words = set(solutions) | herrings
-
-    with open(os.path.join(dir_path, "word_freqs.json"), "r") as f:
-        word_freqs = json.load(f)
-
-    word_freqs = sorted(word_freqs.items(), key=lambda x: x[1], reverse=True)
-
-    # wordle will not allow words other than solutions or herrings so we should
-    # enforce the same behavior:
-    word_freqs = {k: v for k, v in word_freqs[:max_vocab_size] if k in all_valid_words}
-
-    print(f"{len(word_freqs)=}")
-    print(f"{len(solutions)=}")
-    print(f"{len(herrings)=}")
-    print(f"{len(all_valid_words)=}")
-    print(f"{len(all_valid_words - set(word_freqs.keys()))=}")
-    print(f"{len(set(solutions) - set(word_freqs.keys()))=}")
-    # print(f"{solutions - set(word_freqs.keys())=}")
-    # assert len(all_valid_words) == len(
-    #    set(word_freqs.keys()) & all_valid_words
-    # ), "Some words are not in the word list"
+    word_freqs, solutions = load_data_files(max_vocab_size=max_vocab_size)
 
     num_games = num_games or len(solutions)
 
     if debug:
-        with open(os.path.join(dir_path, "results.json")) as f:
+        with open(os.path.join(MY_DIR, "results.json")) as f:
             results = json.load(f)
-        with open(os.path.join(dir_path, "progress_tracker.json")) as f:
-            progress_tracker = json.load(f)
+        # with open(os.path.join(MY_DIR, "progress_tracker.json")) as f:
+        #    progress_tracker = json.load(f)
     else:
         t0 = time.time()
         m = mp.Manager()
@@ -433,28 +412,26 @@ def main(
         with mp.Pool(num_threads) as p:
             r = [p.apply_async(play_game, (i, solutions, word_freqs, q)) for i in range(num_games)]
             finished = 0
-            progress_tracker = []
+            # progress_tracker = []
             with tqdm(total=num_games, unit="game(s)") as pb:
                 while finished < num_games:
                     new_finished = len([1 for x in r if x.ready()])
-                    progress_tracker.append((time.time() - t0, new_finished))
+                    # progress_tracker.append((time.time() - t0, new_finished))
                     pb.update(new_finished - finished)
                     finished = new_finished
-            progress_tracker.append((time.time() - t0, num_games))
+            # progress_tracker.append((time.time() - t0, num_games))
             # results = []
             # for x in r:
             #    results.append(x.get())
             results = [x.get() for x in r]
-            with open(os.path.join(dir_path, "results.json"), "w") as f:
+            with open(os.path.join(MY_DIR, "results.json"), "w") as f:
                 json.dump(results, f)
-            with open(os.path.join(dir_path, "progress_tracker.json"), "w") as f:
-                json.dump(progress_tracker, f)
+            # with open(os.path.join(MY_DIR, "progress_tracker.json"), "w") as f:
+            #    json.dump(progress_tracker, f)
 
-    save_stats(results, progress_tracker, stats_file)
-    save_results(results, output_file, mobile_friendly=mobile_friendly)
-    # with open(output_file, "w") as f:
-    #    f.write(format_results(results, num_seconds))
-    # sys.stderr.flush()
+    save_stats(results, stats_file)
+    if save_grids:
+        save_results(results, output_file, mobile_friendly=mobile_friendly)
 
 
 if __name__ == "__main__":
