@@ -6,15 +6,14 @@
 # Inspired by: https://bert.org/2021/11/24/the-best-starting-word-in-wordle/
 # Wordle: https://www.powerlanguage.co.uk/wordle/
 
+import datetime
 import json
 import math
 import multiprocessing as mp
 import os
 import re
-import string
-import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 
 import fire
 import matplotlib.pyplot as plt
@@ -33,8 +32,11 @@ class WordlePlayer:
     # green = "🟩"
     # yellow = "🟨"
     # black = "⬛"
+    first_wordle_date = datetime.date(2021, 6, 19)
 
-    def __init__(self, wordle_number, solutions, word_freqs, wordlen=5):
+    def __init__(self, solutions, word_freqs, wordle_number=None, wordlen=5):
+        if wordle_number is None:
+            wordle_number = (datetime.date.today() - self.first_wordle_date).days
         self.wordle_number = wordle_number
         self.solutions = solutions
         self.word_freqs = word_freqs
@@ -45,6 +47,7 @@ class WordlePlayer:
         self.guesses = []
         self.all_results = []
         self.color_lines = []
+        self.num_guesses = 0
 
         self.in_word = set([])
         self.chars = []
@@ -147,6 +150,7 @@ class WordlePlayer:
                 result.append("B")
         result = "".join(result)
         self.add_result(word, result)
+        self.num_guesses += 1
         return result
 
     def play(self):
@@ -184,7 +188,7 @@ class WordlePlayer:
 
 
 def play_game(wordle_number, solutions, word_freqs, results_q):
-    output = WordlePlayer(wordle_number, solutions, word_freqs).play()
+    output = WordlePlayer(solutions, word_freqs, wordle_number=wordle_number).play()
     results_q.put(output)
     return output
 
@@ -363,7 +367,7 @@ def load_data_files(max_vocab_size=100_000_000):
         data = json.load(f)
     solutions = data["solutions"]
     herrings = set(data["herrings"])
-    all_valid_words = set(solutions) | herrings
+    all_playable_words = set(solutions) | herrings
 
     with open(os.path.join(MY_DIR, "word_freqs.json"), "r") as f:
         word_freqs = json.load(f)
@@ -371,13 +375,13 @@ def load_data_files(max_vocab_size=100_000_000):
 
     # wordle will not allow words other than solutions or herrings so we should
     # enforce the same behavior:
-    word_freqs = {k: v for k, v in word_freqs[:max_vocab_size] if k in all_valid_words}
+    word_freqs = {k: v for k, v in word_freqs[:max_vocab_size] if k in all_playable_words}
 
     # normalize word_freqs
     max_word_freq = max(word_freqs.values())
     word_freqs = {k: v / max_word_freq for k, v in word_freqs.items()}
 
-    return word_freqs, solutions
+    return word_freqs, solutions, all_playable_words
 
 
 def main(
@@ -391,7 +395,7 @@ def main(
     save_grids=False,
 ):
 
-    word_freqs, solutions = load_data_files(max_vocab_size=max_vocab_size)
+    word_freqs, solutions, all_playable_words = load_data_files(max_vocab_size=max_vocab_size)
 
     num_games = num_games or len(solutions)
 
