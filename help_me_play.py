@@ -14,14 +14,20 @@ from wordle_player import WordlePlayer, load_data_files
 def play(wordle_number=None):
     word_freqs, solutions, all_playable_words = load_data_files()
     wp = WordlePlayer(solutions, word_freqs, wordle_number=wordle_number)
+    print(
+        f"\nPlaying Wordle {wp.wordle_number} - Game date: {wp.wordle_date.strftime('%a, %b %d, %Y')}\n"
+    )
     while not wp.won_game:
-        print(f"I suggest guessing:  {wp.next_word().upper()}")
+        print(f"\nI suggest guessing:\n\n{wp.next_word().upper()}\n")
         guess = ""
         while guess not in all_playable_words:
-            guess = input("What word did you choose? ").strip().lower()
+            guess = input("\nWhat word did you choose? ").strip().lower()
         wp.guess(guess)
         wp._update()
-    print(f"You won! It took you {wp.num_guesses} guesses.")
+    if wp.num_guesses == 1:
+        print(f"\nCorrect! You got it in 1 guess!!!")
+    else:
+        print(f"\nCorrect! You got it in {wp.num_guesses} guesses.")
 
 
 if __name__ == "__main__":

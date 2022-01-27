@@ -38,6 +38,7 @@ class WordlePlayer:
         if wordle_number is None:
             wordle_number = (datetime.date.today() - self.first_wordle_date).days
         self.wordle_number = wordle_number
+        self.wordle_date = self.first_wordle_date + datetime.timedelta(days=wordle_number)
         self.solutions = solutions
         self.word_freqs = word_freqs
         self.wordlen = wordlen
