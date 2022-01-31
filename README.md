@@ -8,16 +8,16 @@ Code that plays [Wordle](https://www.powerlanguage.co.uk/wordle/)
 pip install -r requirements.txt
 
 # play a specific game
-./help_me_play.py [--wordle_number 123]
+./bin/help_me_play.py [--wordle_number 123]
 
 # autoplay every game
-python ./wordle_player.py --help
+python ./bin/wordle_player.py --help
 ```
 
 Inspired by: [The Best Starting Word in Wordle](https://bert.org/2021/11/24/the-best-starting-word-in-wordle/)
 
 ## Results
 
-![Stats](wordle_stats.png)
+![Stats](./output/wordle_stats.png)
 
-![Results](wordle_grids.png)
+![Results](./output/wordle_grids.png)
