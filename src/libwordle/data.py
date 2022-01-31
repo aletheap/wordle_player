@@ -17,7 +17,7 @@ def load_data(max_vocab_size=None, vocab_data_file=None, wordle_data_file=None):
 
 def load_wordle_data(data_file=None):
     if data_file is None:
-        data_file = os.path.join(MY_DIR, "wordle_data.json")
+        data_file = os.path.join(MY_DIR, "wordle_words.json")
 
     # Load all Wordle words. Source: "https://bert.org/assets/posts/wordle/words.json"
     with open(data_file, "r") as f:

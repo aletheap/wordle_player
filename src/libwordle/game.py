@@ -16,9 +16,9 @@ MY_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class WordleGame:
-    black = colors.color(" ", "", "grey")
-    green = colors.color(" ", "", "green")
-    yellow = colors.color(" ", "", "yellow")
+    black = lambda c: colors.color(c, "white", "grey")
+    green = lambda c: colors.color(c, "white", "green")
+    yellow = lambda c: colors.color(c, "white", "yellow")
     # black = "⬛"
     # green = "🟩"
     # yellow = "🟨"
@@ -45,25 +45,40 @@ class WordleGame:
         self.guesses = []
         self.all_hints = []
 
-    def render_hints(self, hints):
-        color_line = [{"G": self.green, "Y": self.yellow, "B": self.black}[c] for c in hints]
+    def render_hints(self, hints, word=None, unicode=False):
+        join_char = " "
+        if word is None:
+            word = " " * self.wordlen
+
+        color_line = ""
+        for h, c in zip(hints, word):
+            if unicode:
+                color_line += {"G": "🟩", "Y": "🟨", "B": "⬛"}[h]
+            else:
+                color = {"G": "green", "Y": "yellow", "B": "grey"}[h]
+                color_line += colors.color(f" {c.upper()} ", "black", color)
+                color_line += join_char
+
         return color_line
 
-    def get_color_grid(self):
+    def get_color_grid(self, unicode=False):
         if self.wordle_number is not None:
             wordle_num_str = self.wordle_number
         else:
             wordle_num_str = f"({self._solution})"
 
-        result = f"Wordle {wordle_num_str} {len(self.guesses)}/6\n"
-        color_lines = [self.render_hints(hints) for hints in self.all_hints]
-        result += "\n".join(color_lines)
+        result = f"Wordle {wordle_num_str} {len(self.guesses)}/6\n\n"
+        color_lines = [self.render_hints(hints, unicode=unicode) for hints in self.all_hints]
+        if unicode:
+            result += "\n".join(color_lines)
+        else:
+            result += "\n\n".join(color_lines)
 
         return result
 
     def guess(self, word):
         word = word.strip().lower()
-        assert word in self.valid_words, "Invalid word: {word}"
+        assert word in self.valid_words, f"Invalid word: {word}"
         assert len(self.guesses) <= 6, "Already guessed 6 words"
 
         self.guesses.append(word)
@@ -111,6 +126,12 @@ class WordleGame:
     #    return output
 
 
+class AbsurdleGame(WordleGame):
+    def __init__(self, wordle_data_file=None):
+        super().__init__(wordle_data_file=wordle_data_file)
+        # FIXME
+
+
 def play(wordle_number=None, solution=None, wordle_data_file=None):
     game = WordleGame(
         wordle_number=wordle_number, solution=solution, wordle_data_file=wordle_data_file
@@ -123,14 +144,25 @@ def play(wordle_number=None, solution=None, wordle_data_file=None):
 
     guess_num = 1
     while not game.won and len(game.guesses) < 6:
-        guess = input(f"Guess {guess_num}: ")
-        hints, won, _ = game.guess(guess)
-        color_line = game.render_hints(hints)
-        print(color_line)
+        prompt = f"Guess {guess_num}: "
+        hints = None
+        while not hints:
+            guess = input(prompt)
+            try:
+                hints, won, _ = game.guess(guess)
+            except AssertionError as e:
+                print(e)
+
+        color_line = game.render_hints(hints, guess)
+        print(" " * len(prompt) + color_line)
         guess_num += 1
 
-        if won:
-            print("\nYou won!\n")
-            print("\n")
-            print(game.get_color_grid())
-            break
+    print("\n\n" + game.get_color_grid(unicode=True))
+
+    if game.won:
+        print("\nYou won!\n")
+        print("\n")
+    else:
+        print("\nYou lost.\n")
+        print("\n")
+    # return game.won

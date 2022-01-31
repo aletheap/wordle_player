@@ -1,2 +1,3 @@
-import data, game, player
+from . import data, game
 
+# import .player

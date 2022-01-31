@@ -1,9 +1,10 @@
 [build-system]
 requires = [
+    "ansicolors",
     "fire",
-    "tqdm",
-    "numpy",
     "matplotlib",
-    "ansicolors"
+    "numpy",
+    "setuptools",
+    "tqdm",
 ]
 build-backend = "setuptools.build_meta"
