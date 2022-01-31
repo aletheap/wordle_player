@@ -1,9 +1,5 @@
-# This file has spoilers for Wordle. Don't read it if you don't want spoilers
-
-
-
-
-wordle_solutions = [
+{
+  "solutions": [
     "cigar",
     "rebut",
     "sissy",
@@ -2319,8 +2315,8 @@ wordle_solutions = [
     "artsy",
     "rural",
     "shave"
-  ]
-wordle_other_valid_words = [
+  ],
+  "other_valid_words": [
     "aahed",
     "aalii",
     "aargh",
@@ -12979,3 +12975,4 @@ wordle_other_valid_words = [
     "zymes",
     "zymic"
   ]
+}

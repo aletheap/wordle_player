@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
+# Wordle Player
+# Plays every possible game of Wordle and prints stats on the progress and results
+# Inspired by: https://bert.org/2021/11/24/the-best-starting-word-in-wordle/
+# Wordle: https://www.powerlanguage.co.uk/wordle/
+
 import datetime
 import json
 import math
@@ -18,7 +23,6 @@ from matplotlib.colors import ListedColormap
 from tqdm import tqdm
 
 MY_DIR = os.path.dirname(os.path.realpath(__file__))
-
 
 
 class WordlePlayer:
@@ -356,29 +360,6 @@ def save_results(
     print(f"Saved grids to {output_file}", flush=True)
 
 
-def load_data_files(max_vocab_size=100_000_000):
-
-    # Load all Wordle words. Source: "https://bert.org/assets/posts/wordle/words.json"
-    data_file = os.path.join(MY_DIR, "words.json")
-    with open(data_file, "r") as f:
-        data = json.load(f)
-    solutions = data["solutions"]
-    herrings = set(data["herrings"])
-    all_playable_words = set(solutions) | herrings
-
-    with open(os.path.join(MY_DIR, "word_freqs.json"), "r") as f:
-        word_freqs = json.load(f)
-    word_freqs = sorted(word_freqs.items(), key=lambda x: x[1], reverse=True)
-
-    # wordle will not allow words other than solutions or herrings so we should
-    # enforce the same behavior:
-    word_freqs = {k: v for k, v in word_freqs[:max_vocab_size] if k in all_playable_words}
-
-    # normalize word_freqs
-    max_word_freq = max(word_freqs.values())
-    word_freqs = {k: v / max_word_freq for k, v in word_freqs.items()}
-
-    return word_freqs, solutions, all_playable_words
 
 
 def main(
