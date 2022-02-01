@@ -2,13 +2,16 @@
 # coding: utf-8
 
 import datetime
+import hashlib
 import os
+import random
+import string
 from collections import defaultdict
 
 import colors
-import fire
+import numpy as np
 
-from .data import load_wordle_data
+from .data import load_vocab, load_wordle_data
 
 MY_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -28,10 +31,19 @@ class WordleGame:
     wordle_number = None
     wordle_date = None
 
-    def __init__(self, solution=None, wordle_number=None, wordle_data_file=None):
+    def __init__(self, solution=None, wordle_number=None, wordle_data_file=None, random_word=False):
         assert not (solution and wordle_number), "Cannot specify solution and wordle_number"
+        assert not (solution and random_word), "Cannot specify solution and random_word"
+        assert not (wordle_number and random_word), "Cannot specify wordle_number and random_word"
 
         self.solutions, self.valid_words = load_wordle_data(wordle_data_file)
+
+        if random_word:
+            word_freqs = {w: f for w, f in load_vocab().items() if w in self.valid_words}
+            total_word_freqs = sum(word_freqs.values())
+            words_probs = [(w, f / total_word_freqs) for w, f in word_freqs.items()]
+            words, probs = list(zip(*words_probs))
+            solution = np.random.choice(words, p=probs)
 
         if not solution:
             if wordle_number is None:
@@ -44,6 +56,17 @@ class WordleGame:
         self.won = False
         self.guesses = []
         self.all_hints = []
+        self.keyboard_colors = {c: "white" for c in string.ascii_lowercase}
+
+    def render_char(self, color, ch=" ", ch_color="black", unicode=False):
+        if unicode:
+            assert ch == " ", "Character not supported for unicode"
+            return {"green": "🟩", "yellow": "🟨", "grey": "⬛", "white": "⬜️"}[color]
+        else:
+            # if color == "white":
+            #    return f" {ch.upper()} "
+            # else:
+            return colors.color(f" {ch.upper()} ", ch_color, color)
 
     def render_hints(self, hints, word=None, unicode=False):
         join_char = " "
@@ -52,11 +75,11 @@ class WordleGame:
 
         color_line = ""
         for h, c in zip(hints, word):
+            color = {"G": "green", "Y": "yellow", "B": "grey", " ": "white"}[h]
             if unicode:
-                color_line += {"G": "🟩", "Y": "🟨", "B": "⬛"}[h]
+                color_line += self.render_char(color, unicode=True)
             else:
-                color = {"G": "green", "Y": "yellow", "B": "grey"}[h]
-                color_line += colors.color(f" {c.upper()} ", "black", color)
+                color_line += self.render_char(color, c)
                 color_line += join_char
 
         return color_line
@@ -65,9 +88,15 @@ class WordleGame:
         if self.wordle_number is not None:
             wordle_num_str = self.wordle_number
         else:
-            wordle_num_str = f"({self._solution})"
+            wordle_num_str = (
+                "(" + hashlib.sha1(self._solution.encode("utf8")).hexdigest()[:10] + ")"
+            )
 
-        result = f"Wordle {wordle_num_str} {len(self.guesses)}/6\n\n"
+        if self.won:
+            guesses = len(self.guesses)
+        else:
+            guesses = "X"
+        result = f"Wordle {wordle_num_str} {guesses}/6\n\n"
         color_lines = [self.render_hints(hints, unicode=unicode) for hints in self.all_hints]
         if unicode:
             result += "\n".join(color_lines)
@@ -93,76 +122,80 @@ class WordleGame:
             if c in solution_letters:
                 if i in solution_letters[c]:
                     hints[i] = "G"
+                    self.keyboard_colors[c] = "green"
                     solution_letters[c].remove(i)
                 elif solution_letters[c]:
                     solution_letters[c] = solution_letters[c][1:]
                     hints[i] = "Y"
+                    if self.keyboard_colors[c] != "green":
+                        self.keyboard_colors[c] = "yellow"
                 if not solution_letters[c]:
                     del solution_letters[c]
             else:
                 hints[i] = "B"
+                if self.keyboard_colors[c] not in ("green", "yellow"):
+                    self.keyboard_colors[c] = "grey"
 
         self.all_hints.append(hints)
         if hints == ["G"] * len(word):
             self.won = True
 
-        return "".join(hints), self.won, len(self.guesses)
+        return ("".join(hints), self.won, len(self.guesses))
 
-    # def play(self):
-    #    for trie in range(1, 7):
-    #        next_word = self.next_word()
-    #        if next_word is None:
-    #            break
-    #        self.guess(next_word)
-    #        output = {
-    #            "won": self.won,
-    #            "guesses": trie,
-    #            "color_grid": self.get_color_grid(),
-    #            "wordle_number": self.wordle_number,
-    #        }
-    #        if output["won"]:
-    #            break
-    #    output["time"] = time.time()
-    #    return output
+    def render_keyboard(self):
+        kbd_1 = []
+        for ch in "qwertyuiop":
+            kbd_1.append(self.render_char(ch=ch, color=self.keyboard_colors[ch]))
+        kbd_1 = "".join(kbd_1)
+
+        kbd_2 = []
+        for ch in "asdfghjkl":
+            kbd_2.append(self.render_char(ch=ch, color=self.keyboard_colors[ch]))
+        kbd_2 = "".join(kbd_2)
+
+        kbd_3 = []
+        for ch in "zxcvbnm":
+            kbd_3.append(self.render_char(ch=ch, color=self.keyboard_colors[ch]))
+        kbd_3 = "   " + "".join(kbd_3)
+
+        return f"{kbd_1}\n{kbd_2}\n{kbd_3}"
+
+    def play(self):
+
+        if self.wordle_number is not None:
+            print(
+                f"\nPlaying Wordle {self.wordle_number} - Game date: {self.wordle_date.strftime('%a, %b %d, %Y')}\n"
+            )
+
+        guess_num = len(self.guesses) + 1
+        color_lines = [self.render_hints(hints=" " * self.wordlen, unicode=False) for _ in range(6)]
+
+        while not self.won and guess_num <= 6:
+            prompt = f"Guess {guess_num}: "
+            hints = None
+            guess = input(prompt)
+            try:
+                hints, won, _ = self.guess(guess)
+                color_lines[guess_num - 1] = self.render_hints(hints, word=guess, unicode=False)
+                guess_num += 1
+            except AssertionError as e:
+                print(e)
+
+            print("\n\n      " + "\n      ".join(color_lines) + "\n\n")
+            print(self.render_keyboard())
+            print("")
+
+        print("\n\n" + self.get_color_grid(unicode=True) + "\n\n")
+
+        if self.won:
+            print("\nCongratulations! You won!\n")
+        else:
+            print(f"\nWord was: {self._solution}\n")
+
+        return self.won
 
 
 class AbsurdleGame(WordleGame):
     def __init__(self, wordle_data_file=None):
         super().__init__(wordle_data_file=wordle_data_file)
         # FIXME
-
-
-def play(wordle_number=None, solution=None, wordle_data_file=None):
-    game = WordleGame(
-        wordle_number=wordle_number, solution=solution, wordle_data_file=wordle_data_file
-    )
-
-    if game.wordle_number is not None:
-        print(
-            f"\nPlaying Wordle {game.wordle_number} - Game date: {game.wordle_date.strftime('%a, %b %d, %Y')}\n"
-        )
-
-    guess_num = 1
-    while not game.won and len(game.guesses) < 6:
-        prompt = f"Guess {guess_num}: "
-        hints = None
-        while not hints:
-            guess = input(prompt)
-            try:
-                hints, won, _ = game.guess(guess)
-            except AssertionError as e:
-                print(e)
-
-        color_line = game.render_hints(hints, guess)
-        print(" " * len(prompt) + color_line)
-        guess_num += 1
-
-    print("\n\n" + game.get_color_grid(unicode=True))
-
-    if game.won:
-        print("\nYou won!\n")
-        print("\n")
-    else:
-        print("\nYou lost.\n")
-        print("\n")
-    # return game.won

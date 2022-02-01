@@ -31,14 +31,14 @@ def load_wordle_data(data_file=None):
 
 def load_vocab(max_vocab_size=None, data_file=None):
     if data_file is None:
-        data_file = os.path.join(MY_DIR, "vocab.json")
+        data_file = os.path.join(MY_DIR, "word_freqs.json")
 
     with open(data_file, "r") as f:
         vocab = json.load(f)
     vocab = sorted(vocab.items(), key=lambda x: x[1], reverse=True)[:max_vocab_size]
 
     # normalize vocab
-    max_word_freq = max(vocab.values())
-    vocab = {k: v / max_word_freq for k, v in vocab.items()}
+    total_freqs = sum([x[1] for x in vocab])
+    vocab = {w: f / total_freqs for w, f in vocab}
 
     return vocab
