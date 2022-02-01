@@ -11,7 +11,7 @@ from collections import defaultdict
 import colors
 import numpy as np
 
-from .data import load_vocab, load_wordle_data
+from .data import load_word_freqs, load_wordle_data
 
 MY_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -31,18 +31,34 @@ class WordleGame:
     wordle_number = None
     wordle_date = None
 
-    def __init__(self, solution=None, wordle_number=None, wordle_data_file=None, random_word=False):
+    def __init__(
+        self,
+        solution=None,
+        wordle_number=None,
+        random_word=False,
+        solutions=None,
+        valid_words=None,
+        word_freqs=None,
+    ):
         assert not (solution and wordle_number), "Cannot specify solution and wordle_number"
         assert not (solution and random_word), "Cannot specify solution and random_word"
         assert not (wordle_number and random_word), "Cannot specify wordle_number and random_word"
 
-        self.solutions, self.valid_words = load_wordle_data(wordle_data_file)
+        loaded_solutions = None
+        if valid_words is None:
+            loaded_solutions, valid_words = load_wordle_data()
+        if solutions is None:
+            if loaded_solutions is None:
+                solutions, _ = load_wordle_data()
+            else:
+                solutions = loaded_solutions
+
+        self.solutions, self.valid_words = solutions, valid_words
 
         if random_word:
-            word_freqs = {w: f for w, f in load_vocab().items() if w in self.valid_words}
-            total_word_freqs = sum(word_freqs.values())
-            words_probs = [(w, f / total_word_freqs) for w, f in word_freqs.items()]
-            words, probs = list(zip(*words_probs))
+            if word_freqs is None:
+                word_freqs = load_word_freqs(only_include_words=self.valid_words)
+            words, probs = zip(*word_freqs.items())
             solution = np.random.choice(words, p=probs)
 
         if not solution:
@@ -54,6 +70,7 @@ class WordleGame:
         self._solution = solution
 
         self.won = False
+        self.is_finished = False
         self.guesses = []
         self.all_hints = []
         self.keyboard_colors = {c: "white" for c in string.ascii_lowercase}
@@ -84,13 +101,14 @@ class WordleGame:
 
         return color_line
 
-    def get_color_grid(self, unicode=False):
+    def get_color_grid(self, unicode=False, numeric=False):
         if self.wordle_number is not None:
             wordle_num_str = self.wordle_number
         else:
-            wordle_num_str = (
-                "(" + hashlib.sha1(self._solution.encode("utf8")).hexdigest()[:10] + ")"
-            )
+            # wordle_num_str = (
+            #    "(" + hashlib.sha1(self._solution.encode("utf8")).hexdigest()[:10] + ")"
+            # )
+            wordle_num_str = "(" + self._solution + ")"
 
         if self.won:
             guesses = len(self.guesses)
@@ -108,9 +126,12 @@ class WordleGame:
     def guess(self, word):
         word = word.strip().lower()
         assert word in self.valid_words, f"Invalid word: {word}"
-        assert len(self.guesses) <= 6, "Already guessed 6 words"
+        assert not self.is_finished, "Game is over"
 
         self.guesses.append(word)
+
+        if len(self.guesses) == 6:
+            self.is_finished = True
 
         hints = [" "] * self.wordlen
 
@@ -139,8 +160,9 @@ class WordleGame:
         self.all_hints.append(hints)
         if hints == ["G"] * len(word):
             self.won = True
+            self.is_finished = True
 
-        return ("".join(hints), self.won, len(self.guesses))
+        return hints
 
     def render_keyboard(self):
         kbd_1 = []
@@ -170,12 +192,12 @@ class WordleGame:
         guess_num = len(self.guesses) + 1
         color_lines = [self.render_hints(hints=" " * self.wordlen, unicode=False) for _ in range(6)]
 
-        while not self.won and guess_num <= 6:
+        while not self.is_finished:
             prompt = f"Guess {guess_num}: "
             hints = None
             guess = input(prompt)
             try:
-                hints, won, _ = self.guess(guess)
+                hints = self.guess(guess)
                 color_lines[guess_num - 1] = self.render_hints(hints, word=guess, unicode=False)
                 guess_num += 1
             except AssertionError as e:
