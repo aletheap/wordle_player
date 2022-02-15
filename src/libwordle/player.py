@@ -26,7 +26,6 @@ class WordlePlayer:
     def __init__(self, word_freqs=None):
         if word_freqs is None:
             _, _, word_freqs = load_data()
-        print(f"{len(word_freqs)=}")
 
         max_freq = max(word_freqs.values())
         self.word_freqs = {w: f / max_freq for w, f in word_freqs.items()}
