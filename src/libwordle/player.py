@@ -31,6 +31,7 @@ class WordlePlayer:
         self.in_word = set([])
         self.chars = [{"no": set([]), "yes": None} for _ in range(self.wordlen)]
         self._update()
+        self.won = False
 
     def _update(self):
         self.regexes = self._update_regexes()
@@ -104,7 +105,22 @@ class WordlePlayer:
         for position in range(self.wordlen):
             self.chars[position]["no"].add(letter)
 
+    def clean_hints(self, hints):
+        hints = "".join(hints.split()).upper()
+        return hints
+
+    def valid_hints(self, hints):
+        if not isinstance(hints, str):
+            return False
+        if not len(hints) == self.wordlen:
+            return False
+        hints_s = set(self.clean_hints(hints))
+        return hints_s.issubset(set("GYB"))
+
     def add_hints(self, word, hints):
+        hints = self.clean_hints(hints)
+        if hints == "G" * 5:
+            self.won = True
         for i, r in enumerate(hints):
             f = {"G": self.correct, "Y": self.wrong_position, "B": self.not_in_word}[r]
             f(word[i], i)
