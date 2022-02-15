@@ -1,3 +1,3 @@
-from . import data, game
+from . import data, game, player, visualization
 
 # import .player

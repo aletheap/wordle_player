@@ -2,9 +2,6 @@
 # coding: utf-8
 
 import datetime
-import hashlib
-import os
-import random
 import string
 from collections import defaultdict
 
@@ -12,10 +9,6 @@ import colors
 import numpy as np
 
 from .data import load_word_freqs, load_wordle_data
-
-MY_DIR = os.path.dirname(os.path.realpath(__file__))
-
-# print((color(' ', '', 'green') + ' ') +  3 * (color(' ', '', 'yellow') + ' ') + color(' ', '', 'grey'))
 
 
 class WordleGame:
@@ -39,6 +32,7 @@ class WordleGame:
         solutions=None,
         valid_words=None,
         word_freqs=None,
+        max_guesses=6,
     ):
         assert not (solution and wordle_number), "Cannot specify solution and wordle_number"
         assert not (solution and random_word), "Cannot specify solution and random_word"
@@ -74,6 +68,7 @@ class WordleGame:
         self.guesses = []
         self.all_hints = []
         self.keyboard_colors = {c: "white" for c in string.ascii_lowercase}
+        self.max_guesses = max_guesses
 
     def render_char(self, color, ch=" ", ch_color="black", unicode=False):
         if unicode:
@@ -114,7 +109,7 @@ class WordleGame:
             guesses = len(self.guesses)
         else:
             guesses = "X"
-        result = f"Wordle {wordle_num_str} {guesses}/6\n\n"
+        result = f"Wordle {wordle_num_str} {guesses}/{self.max_guesses}\n\n"
         color_lines = [self.render_hints(hints, unicode=unicode) for hints in self.all_hints]
         if unicode:
             result += "\n".join(color_lines)
@@ -130,7 +125,7 @@ class WordleGame:
 
         self.guesses.append(word)
 
-        if len(self.guesses) == 6:
+        if len(self.guesses) == self.max_guesses:
             self.is_finished = True
 
         hints = [" "] * self.wordlen

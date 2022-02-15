@@ -6,23 +6,13 @@
 # Inspired by: https://bert.org/2021/11/24/the-best-starting-word-in-wordle/
 # Wordle: https://www.powerlanguage.co.uk/wordle/
 
-import datetime
-import json
 import math
-import multiprocessing as mp
 import os
-import re
-import time
-from collections import Counter
 
-import fire
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 from matplotlib.colors import ListedColormap
-from tqdm import tqdm
-
-MY_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 def draw_guesses_hist(ax, results):
@@ -128,7 +118,9 @@ def drawgame(ax, wordle_number, mat):
     # ax.axis(colors='w')
 
 
-def save_stats(results, output_file="wordle_stats.png"):
+def save_stats(results, output_dir="."):
+    output_file = os.path.join(output_dir, "wordle_stats.png")
+
     print(f"Saving stats to {output_file}", flush=True)
 
     grid_h = 3
@@ -160,11 +152,13 @@ def save_stats(results, output_file="wordle_stats.png"):
 
 def save_results(
     results,
-    output_file="wordle_grids.png",
+    output_dir=".",
     aspect_ratio=1.6,
     mobile_friendly=False,
 ):
+    output_file = os.path.join(output_dir, "wordle_grids.png")
     print(f"Saving grids to {output_file}", flush=True)
+
     results = sorted(results, key=lambda x: x["wordle_number"])
 
     total_games = len(results)

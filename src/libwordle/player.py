@@ -7,26 +7,9 @@
 # Wordle: https://www.powerlanguage.co.uk/wordle/
 
 import datetime
-import json
-import math
-import multiprocessing as mp
-import os
 import re
-import time
-from collections import Counter
-
-import fire
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import numpy as np
-from matplotlib.colors import ListedColormap
-from tqdm import tqdm
 
 from .data import load_data
-from .game import WordleGame
-
-MY_DIR = os.path.dirname(os.path.realpath(__file__))
-
 
 class WordlePlayer:
     black = 1
@@ -82,20 +65,27 @@ class WordlePlayer:
         return filtered_words
 
     def _score_letters(self):
-        letter_scores = {
-            (i, l): 0 for i in range(self.wordlen) for l in "abcdefghijklmnopqrstuvwxyz"
-        }
-        letter_counter = Counter([(i, l) for w in self.filtered_words for i, l in enumerate(w)])
-        letter_scores.update(dict(letter_counter))
-        M = max(letter_scores.values())
-        if M != 0:
-            letter_scores = {k: v / M for k, v in letter_scores.items()}
+        letter_scores = {L: 0 for L in "abcdefghijklmnopqrstuvwxyz"}
+
+        # measure how close each letter is to dividing the remaining words in half
+        # s = 1  means the letter is in exactly half of words
+        # s = 0 means the letter is in 0 words or all words
+        n_filtered_words = len(self.filtered_words)
+
+        if n_filtered_words > 0:
+            for word in self.filtered_words:
+                for L in word:
+                    letter_scores[L] += 1
+
+            letter_scores = {L: (2 * (f / n_filtered_words)) - 1 for L, f in letter_scores.items()}
+            letter_scores = {L: 1 - (abs(f)) for L, f in letter_scores.items()}
+
         return letter_scores
 
     def _score_one_word(self, word):
-        avg_letter_score = sum([self.letter_scores[x] for x in enumerate(word)]) / self.wordlen
+        avg_letter_score = sum([self.letter_scores[c] for c in word]) / len(word)
         unique_letters = len(set(word))
-        return (avg_letter_score * unique_letters) + self.word_freqs[word]
+        return avg_letter_score * unique_letters  # + self.word_freqs[word]
 
     def _score_words(self):
         return list(reversed(sorted([(self._score_one_word(w), w) for w in self.filtered_words])))

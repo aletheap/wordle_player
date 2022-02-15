@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
-import datetime
-
 import fire
-
-from wordle_player import WordlePlayer, load_data_files
+from libwordle.game import WordleGame
+from libwordle.player import WordlePlayer
 
 # Use load_datafiles to load the data
 # and create a WordlePlayer object
@@ -12,22 +10,23 @@ from wordle_player import WordlePlayer, load_data_files
 
 
 def play(wordle_number=None):
-    word_freqs, solutions, all_playable_words = load_data_files()
-    wp = WordlePlayer(solutions, word_freqs, wordle_number=wordle_number)
+    p = WordlePlayer()
+    g = WordleGame(wordle_number=wordle_number)
     print(
-        f"\nPlaying Wordle {wp.wordle_number} - Game date: {wp.wordle_date.strftime('%a, %b %d, %Y')}\n"
+        f"\nPlaying Wordle {g.wordle_number} - Game date: {g.wordle_date.strftime('%a, %b %d, %Y')}\n"
     )
-    while not wp.won_game:
-        print(f"\nI suggest guessing:\n\n{wp.next_word().upper()}\n")
+    while not g.won and len(g.guesses) < g.max_guesses:
+        next_best_guess = p.best_guess().upper()
+        print(f"\nI suggest guessing:\n\n{next_best_guess}\n")
         guess = ""
-        while guess not in all_playable_words:
-            guess = input("\nWhat word did you choose? ").strip().lower()
-        wp.guess(guess)
-        wp._update()
-    if wp.num_guesses == 1:
+        while guess not in g.valid_words:
+            guess = input(f"\nWhat word did you choose? ").strip().lower()
+        hints = g.guess(guess)
+        p.add_hints(guess, hints)
+    if len(g.guesses) == 1:
         print(f"\nCorrect! You got it in 1 guess!!!")
     else:
-        print(f"\nCorrect! You got it in {wp.num_guesses} guesses.")
+        print(f"\nCorrect! You got it in {len(g.guesses)} guesses.")
 
 
 if __name__ == "__main__":
