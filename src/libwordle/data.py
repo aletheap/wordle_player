@@ -41,10 +41,10 @@ def load_word_freqs(max_vocab_size=None, data_file=None, only_include_words=None
         word_freqs = {k: v for k, v in word_freqs.items() if k in only_include_words}
 
     # truncate to max len
-    word_freqs = sorted(word_freqs.items(), key=lambda x: x[1], reverse=True)[:max_vocab_size]
+    word_freqs = dict(sorted(word_freqs.items(), key=lambda x: x[1], reverse=True)[:max_vocab_size])
 
     # normalize word_freqs
-    total_freqs = sum([x[1] for x in word_freqs])
-    word_freqs = {w: f / total_freqs for w, f in word_freqs}
+    total_freqs = sum(word_freqs.values())
+    word_freqs = {w: f / total_freqs for w, f in word_freqs.items()}
 
     return word_freqs
