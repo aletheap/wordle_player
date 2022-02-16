@@ -130,27 +130,39 @@ class WordleGame:
 
         hints = [" "] * self.wordlen
 
-        solution_letters = defaultdict(list)
-        for i, c in enumerate(self._solution):
-            solution_letters[c].append(i)
+        # solution_letters = defaultdict(list)
+        # for i, c in enumerate(self._solution):
+        #    solution_letters[c].append(i)
 
         for i, c in enumerate(word):
-            if c in solution_letters:
-                if i in solution_letters[c]:
-                    hints[i] = "G"
-                    self.keyboard_colors[c] = "green"
-                    solution_letters[c].remove(i)
-                elif solution_letters[c]:
-                    solution_letters[c] = solution_letters[c][1:]
-                    hints[i] = "Y"
-                    if self.keyboard_colors[c] != "green":
-                        self.keyboard_colors[c] = "yellow"
-                if not solution_letters[c]:
-                    del solution_letters[c]
+            if self._solution[i] == c:
+                hints[i] = "G"
+                self.keyboard_colors[c] = "green"
+            elif c in self._solution:
+                hints[i] = "Y"
+                if self.keyboard_colors[c] != "green":
+                    self.keyboard_colors[c] = "yellow"
             else:
                 hints[i] = "B"
                 if self.keyboard_colors[c] not in ("green", "yellow"):
                     self.keyboard_colors[c] = "grey"
+
+            # if c in solution_letters:
+            #    if i in solution_letters[c]:
+            #        hints[i] = "G"
+            #        self.keyboard_colors[c] = "green"
+            #        solution_letters[c].remove(i)
+            #    elif solution_letters[c]:
+            #        solution_letters[c] = solution_letters[c][1:]
+            #        hints[i] = "Y"
+            #        if self.keyboard_colors[c] != "green":
+            #            self.keyboard_colors[c] = "yellow"
+            #    if not solution_letters[c]:
+            #        del solution_letters[c]
+            # else:
+            #    hints[i] = "B"
+            #    if self.keyboard_colors[c] not in ("green", "yellow"):
+            #        self.keyboard_colors[c] = "grey"
 
         self.all_hints.append(hints)
         if hints == ["G"] * len(word):

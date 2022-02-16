@@ -20,7 +20,6 @@ class WordlePlayer:
     # green = "🟩"
     # yellow = "🟨"
     # black = "⬛"
-    first_wordle_date = datetime.date(2021, 6, 19)
     wordlen = 5
 
     def __init__(self, word_freqs=None):
@@ -30,16 +29,18 @@ class WordlePlayer:
         max_freq = max(word_freqs.values())
         self.word_freqs = {w: f / max_freq for w, f in word_freqs.items()}
 
-        self.in_word = set([])
+        self.won = False
+        self.letters_in_word = set([])
+        self.letters_not_in_word = set([])
         self.chars = [{"no": set([]), "yes": None} for _ in range(self.wordlen)]
         self._update()
-        self.won = False
 
     def _update(self):
         self.regexes = self._update_regexes()
         self.filtered_words = self._filter_words()
         self.letter_scores = self._score_letters()
         self.word_scores = self._score_words()
+        # print(f"{self.regexes=}")
 
     def _re_str_for_pos(self, pos):
         if self.chars[pos]["yes"]:
@@ -53,8 +54,14 @@ class WordlePlayer:
         regexes = []
         main_regex_split = [self._re_str_for_pos(i) for i in range(self.wordlen)]
         main_regex = "^" + "".join(main_regex_split) + "$"
-        for letter in self.in_word:
+        for letter in self.letters_in_word:
             regexes.append(re.compile(f"^.*{letter}"))
+        if self.letters_not_in_word:
+            regexes.append(
+                re.compile(
+                    "[^" + "".join(self.letters_not_in_word) + "]{" + str(self.wordlen) + "}"
+                )
+            )
         return [re.compile(main_regex)] + [re.compile(r) for r in regexes]
 
     def _matches_all_regexes(self, word):
@@ -86,7 +93,7 @@ class WordlePlayer:
     def wrong_position(self, letter, position):
         letter = letter.lower()
         self.chars[position]["no"].add(letter)
-        self.in_word.add(letter)
+        self.letters_in_word.add(letter)
 
     def correct(self, letter, position):
         letter = letter.lower()
@@ -94,13 +101,12 @@ class WordlePlayer:
 
     def not_in_word(self, letter, position=None):
         letter = letter.lower()
-        for position in range(self.wordlen):
-            self.chars[position]["no"].add(letter)
+        self.letters_not_in_word.add(letter)
 
     def clean_hints(self, hints):
         if isinstance(hints, list):
             hints = "".join(hints)
-        return hints.upper()
+        return hints.strip().upper()
 
     def valid_hints(self, hints):
         if not isinstance(hints, str):
@@ -112,10 +118,11 @@ class WordlePlayer:
 
     def add_hints(self, word, hints):
         hints = self.clean_hints(hints)
+        # print(f"Adding hints: {hints}")
         if hints == "G" * 5:
             self.won = True
-        for i, r in enumerate(hints):
-            f = {"G": self.correct, "Y": self.wrong_position, "B": self.not_in_word}[r]
+        for i, h in enumerate(hints):
+            f = {"G": self.correct, "Y": self.wrong_position, "B": self.not_in_word}[h]
             f(word[i], i)
 
     def best_guess(self):
