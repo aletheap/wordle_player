@@ -7,14 +7,15 @@ Code that plays [Wordle](https://www.powerlanguage.co.uk/wordle/)
 ```sh
 pip install "."
 
-# play a specific game
-./bin/help_me_play.py [--wordle_number 123]
+# play any wordle game you want
+python ./bin/play_wordle.py --wordle_number=123
 
-# autoplay every game
-python ./bin/wordle_player.py --help
+# get help playing wordle
+./bin/help_me_play.py 
 
-# play any wordlgame you want
-python ./bin/play_wordle.py --help
+# autoplay every possible wordle game and generate stats on performance
+./bin/auto_play.py 
+
 ```
 
 Inspired by: [The Best Starting Word in Wordle](https://bert.org/2021/11/24/the-best-starting-word-in-wordle/)
