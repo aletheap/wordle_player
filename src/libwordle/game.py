@@ -50,6 +50,7 @@ class WordleGame:
         self.solutions, self.valid_words = solutions, valid_words
 
         if random_word:
+            print("choosing random word")
             if word_freqs is None:
                 word_freqs = load_word_freqs(only_include_words=self.valid_words)
             words, probs = zip(*word_freqs.items())

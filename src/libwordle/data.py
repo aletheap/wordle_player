@@ -29,7 +29,7 @@ def load_wordle_data(data_file=None):
     return solutions, all_words
 
 
-def load_word_freqs(max_vocab_size=None, data_file=None, only_include_words=None):
+def load_word_freqs(max_vocab_size=-1, data_file=None, only_include_words=None):
     if data_file is None:
         data_file = os.path.join(MY_DIR, "word_freqs.json")
 
