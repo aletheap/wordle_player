@@ -11,6 +11,8 @@ from .data import load_data, WORDLE_START_DATE, WORD_LENGTH
 
 
 class WordleGame:
+    """The back end for a game of Wordle"""
+
     def __init__(self, wordle_number=None, random_word=False, word_data=None, max_guesses=6):
         assert not (
             bool(wordle_number) and bool(random_word)
@@ -46,6 +48,7 @@ class WordleGame:
         self.max_guesses = max_guesses
 
     def guess(self, word):
+        """Guess a word and return the hints"""
         assert not self.is_finished, "Game is over"
 
         word = word.strip().lower()
@@ -75,6 +78,8 @@ class WordleGame:
 
 
 class InteractiveWordleGame:
+    """A game of Wordle that can be played interactively on the command line"""
+
     def __init__(self, wordle_number=None, random_word=False, word_data=None, max_guesses=6):
         self.game = WordleGame(
             wordle_number=wordle_number,
@@ -86,6 +91,8 @@ class InteractiveWordleGame:
         self.all_hints = []
 
     def play(self):
+        """Entry point to play the game"""
+
         self.show_start_header()
 
         while not self.game.is_finished:
@@ -105,12 +112,16 @@ class InteractiveWordleGame:
         return self.game.won
 
     def show_start_header(self):
+        """Print the header for the start of the game"""
+
         if self.game.wordle_number is not None:
             print(
                 f"\nPlaying Wordle {self.game.wordle_number} - Game date: {self.game.wordle_date.strftime('%a, %b %d, %Y')}\n"
             )
 
     def show_all_hints(self):
+        """Print all the hints so far"""
+
         print("\n")
         color_lines = self.render_guesses()
         for line in color_lines:
@@ -120,6 +131,8 @@ class InteractiveWordleGame:
         print("\n")
 
     def show_game_end(self):
+        """Print the game end message including shareable grid if won"""
+
         if self.game.won:
             print("")
             print("Congratulations! You won!")
@@ -132,6 +145,8 @@ class InteractiveWordleGame:
             print("")
 
     def render_guesses(self, new_guess=None, new_hints=None):
+        """Render the guesses and hints so far"""
+
         lines = []
 
         # render any existing hints
@@ -147,6 +162,8 @@ class InteractiveWordleGame:
         return lines
 
     def render_keyboard(self):
+        """Render the keyboard with the current hints"""
+
         # calculate colors for keyboard
         kbd_colors = {L: "W" for L in string.ascii_lowercase}
         priority = {"W": 0, "B": 1, "Y": 2, "G": 3}
@@ -164,6 +181,8 @@ class InteractiveWordleGame:
         return "\n".join(rows)
 
     def render_shareable_grid(self):
+        """Render the shareable grid"""
+
         emojis = {"G": "🟩", "Y": "🟨", "B": "⬛"}
         if self.game.wordle_number is not None:
             wordle_num_str = self.game.wordle_number
@@ -181,5 +200,7 @@ class InteractiveWordleGame:
         return result
 
     def color_character(self, c, hint):
+        """Color a character based on the hint"""
+
         hint_colors = {"G": "green", "Y": "yellow", "B": "grey", "W": "white"}
         return colors.color(f" {c.upper()} ", "black", hint_colors[hint])

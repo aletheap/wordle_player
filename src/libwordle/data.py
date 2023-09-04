@@ -10,6 +10,7 @@ WORD_FREQS_DATA_FILE = os.path.join(MY_DIR, "word_freqs_google.json")
 WORDLE_START_DATE = datetime.date(2021, 6, 19)
 WORD_LENGTH = 5
 
+# Cache data to avoid reloading it
 CACHE = {
     "wordle_solutions": [],
     "wordle_valid_words": set(),
@@ -18,12 +19,14 @@ CACHE = {
 
 
 def load_data():
+    """Load wordle solutions, wordle valid words, and English word frequencies"""
     wordle_solutions, wordle_valid_words = load_wordle_data()
     word_freqs = load_word_freqs()
     return wordle_solutions, wordle_valid_words, word_freqs
 
 
 def load_wordle_data():
+    """Load wordle solutions and valid words"""
     if not CACHE["wordle_solutions"]:
         with open(WORDLE_DATA_FILE, "r") as f:
             data = json.load(f)
@@ -34,6 +37,7 @@ def load_wordle_data():
 
 
 def load_word_freqs():
+    """Load English word frequencies from Google's Unigrams dataset"""
     if not CACHE["word_freqs"]:
         with open(WORD_FREQS_DATA_FILE, "r") as f:
             word_freqs = json.load(f)
@@ -43,6 +47,7 @@ def load_word_freqs():
 
 
 def norm(o):
+    """Normalize a dict or list of numbers to sum to 1"""
     if isinstance(o, dict):
         total = sum(o.values())
         return {k: v / total for k, v in o.items()}
