@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 
-import random
 from typing import Optional
 
 import fire

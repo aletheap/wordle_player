@@ -1,6 +1,6 @@
+import datetime
 import json
 import os
-import datetime
 
 MY_DIR = os.path.dirname(os.path.realpath(__file__))
 # Source: "https://bert.org/assets/posts/wordle/words.json"

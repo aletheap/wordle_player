@@ -12,9 +12,6 @@ import os
 import re
 import time
 
-# from collections import Counter
-from collections import defaultdict
-
 import numpy as np
 from tqdm import tqdm
 
