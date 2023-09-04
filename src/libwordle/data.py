@@ -12,7 +12,7 @@ WORD_LENGTH = 5
 
 CACHE = {
     "wordle_solutions": [],
-    "wordle_valid_words": [],
+    "wordle_valid_words": set(),
     "word_freqs": {},
 }
 
@@ -28,9 +28,8 @@ def load_wordle_data():
         with open(WORDLE_DATA_FILE, "r") as f:
             data = json.load(f)
         CACHE["wordle_solutions"] = data["solutions"]
-        CACHE["wordle_valid_words"] = sorted(
-            list(set(data["solutions"]) | set(data["other_valid_words"]))
-        )
+        CACHE["wordle_valid_words"] = set(data["solutions"]) | set(data["other_valid_words"])
+
     return CACHE["wordle_solutions"], CACHE["wordle_valid_words"]
 
 

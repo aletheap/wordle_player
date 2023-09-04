@@ -27,13 +27,11 @@ class WordleGame:
             }
         self.solutions = word_data["solutions"]
         self.valid_words = word_data["valid_words"]
-        self.word_freqs = word_data["word_freqs"]
-        self.hints = word_data.get("hints")
 
         # record solution for this game
         if random_word:
             print("choosing random word")
-            words, probs = zip(*self.word_freqs.items())
+            words, probs = zip(*word_data["word_freqs"].items())
             self.solution = np.random.choice(words, p=probs)
             self.wordle_number = None
             self.wordle_date = None
@@ -52,14 +50,13 @@ class WordleGame:
 
     def guess(self, word):
         word = word.strip().lower()
-        assert word in self.valid_words, f"Invalid word: {word}"
-        assert word not in self.all_guesses, f"Already guessed word: {word}"
-        assert not self.is_finished, "Game is over"
 
-        self.all_guesses.append(word)
+        assert not self.is_finished, "Game is over"
+        assert word not in self.all_guesses, f"Already guessed word: {word}"
+        assert len(word) == WORD_LENGTH, f"Invalid word length: {word}"
+        assert word in self.valid_words, f"Invalid word: {word}"
 
         hints = [" "] * WORD_LENGTH
-
         for i, c in enumerate(word):
             if self.solution[i] == c:
                 hints[i] = "G"
@@ -69,11 +66,12 @@ class WordleGame:
                 hints[i] = "B"
 
         self.all_hints.append(hints)
-        if hints == ["G"] * len(word):
-            self.won = True
-            self.is_finished = True
+        self.all_guesses.append(word)
 
-        if len(self.all_guesses) == self.max_guesses:
+        if word == self.solution:
+            self.won = True
+
+        if self.won or (len(self.all_guesses) == self.max_guesses):
             self.is_finished = True
 
         return hints
@@ -116,81 +114,61 @@ class InteractiveWordleGame:
             )
 
     def show_all_hints(self):
-        print("")
-        print("")
+        print("\n")
         color_lines = self.render_guesses()
         for line in color_lines:
             print("      " + line)
-        print("")
-        print("")
+        print("\n")
         print(self.render_keyboard())
-        print("")
-        print("")
+        print("\n")
 
     def show_game_end(self):
         if self.game.won:
             print("")
             print("Congratulations! You won!")
-            print("")
-            print("")
+            print("\n")
             print(self.render_shareable_grid())
-            print("")
-            print("")
+            print("\n")
         else:
             print("")
             print(f"Word was: {self.game.solution}")
             print("")
 
     def render_guesses(self, new_guess=None, new_hints=None):
-        hint_colors = {"G": "green", "Y": "yellow", "B": "grey"}
-        color_lines = []
+        lines = []
 
         # render any existing hints
         for guess, hints in zip(self.all_guesses, self.all_hints):
-            color_line = [
-                colors.color(f" {c.upper()} ", "black", hint_colors[h])
-                for h, c in zip(hints, guess)
-            ]
-            color_lines.append(" ".join(color_line))
+            line = [self.render_character(c, h) for h, c in zip(hints, guess)]
+            lines.append(" ".join(line))
 
         # add any remaining blank lines
         for _ in range(self.game.max_guesses - len(self.all_guesses)):
-            color_line = [colors.color("   ", "black", "white") for _ in range(WORD_LENGTH)]
-            color_lines.append(" ".join(color_line))
+            line = [self.render_character(" ", "W") for _ in range(WORD_LENGTH)]
+            lines.append(" ".join(line))
 
-        return color_lines
+        return lines
 
     def render_keyboard(self):
         # calculate colors for keyboard
-        kbd_cols = {c: "white" for c in string.ascii_lowercase}
-        for guess, hints in zip(self.game.all_guesses, self.game.all_hints):
-            for h, c in zip(hints, guess):
-                if h == "G":
-                    kbd_cols[c] = "green"
-                elif h == "Y" and kbd_cols[c] != "green":
-                    kbd_cols[c] = "yellow"
-                elif h == "B" and kbd_cols[c] == "white":
-                    kbd_cols[c] = "grey"
+        kbd_colors = {L: "W" for L in string.ascii_lowercase}
+        priority = {"W": 0, "B": 1, "Y": 2, "G": 3}
+        for letter, hint in zip("".join(self.all_guesses), "".join(self.all_hints)):
+            if priority[hint] > priority[kbd_colors[letter]]:
+                kbd_colors[letter] = hint
 
-        # row 1
-        kbd_1 = []
-        for ch in "qwertyuiop":
-            kbd_1.append(colors.color(f" {ch.upper()} ", "black", kbd_cols[ch]))
-        kbd_1 = "".join(kbd_1)
+        # render the keyboard rows
+        rows = []
+        for letters in ("qwertyuiop", "asdfghjkl", "zxcvbnm"):
+            row = [self.render_character(L, kbd_colors[L]) for L in letters]
+            rows.append("".join(row))
+        rows[-1] = "   " + rows[-1]
 
-        # row 2
-        kbd_2 = []
-        for ch in "asdfghjkl":
-            kbd_2.append(colors.color(f" {ch.upper()} ", "black", kbd_cols[ch]))
-        kbd_2 = "".join(kbd_2)
+        return "\n".join(rows)
 
-        # row 3
-        kbd_3 = []
-        for ch in "zxcvbnm":
-            kbd_3.append(colors.color(f" {ch.upper()} ", "black", kbd_cols[ch]))
-        kbd_3 = "   " + "".join(kbd_3)
-
-        return f"{kbd_1}\n{kbd_2}\n{kbd_3}"
+    def render_character(self, c, hint):
+        hint_colors = {"G": "green", "Y": "yellow", "B": "grey", "W": "white"}
+        return colors.color(f" {c.upper()} ", "black", hint_colors[hint])
 
     def render_shareable_grid(self):
         emojis = {"G": "🟩", "Y": "🟨", "B": "⬛"}
