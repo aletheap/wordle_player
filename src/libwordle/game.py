@@ -7,7 +7,7 @@ import string
 import colors
 import numpy as np
 
-from .data import load_data, WORDLE_START_DATE, WORD_LENGTH
+from .data import WORD_LENGTH, WORDLE_START_DATE, load_data
 
 
 class WordleGame:
@@ -194,8 +194,8 @@ class InteractiveWordleGame:
         else:
             guesses = "X"
         result = f"Wordle {wordle_num_str} {guesses}/{self.game.max_guesses}\n\n"
-        color_lines = ["".join([emojis[h] for h in hints]) for hints in self.all_hints]
-        result += "\n".join(color_lines)
+        grid_lines = ["".join([emojis[h] for h in hints]) for hints in self.all_hints]
+        result += "\n".join(grid_lines)
 
         return result
 
