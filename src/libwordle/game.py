@@ -64,11 +64,17 @@ class WordleGame:
         if self.won or (len(self.all_guesses) == self.max_guesses):
             self.is_finished = True
 
+        return self.calculate_hints(word, self.solution)
+
+    @staticmethod
+    def calculate_hints(guess, solution):
+        """Calculate the hints for a guess and solution"""
+
         hints = [" "] * WORD_LENGTH
-        for i, c in enumerate(word):
-            if self.solution[i] == c:
+        for i, c in enumerate(guess):
+            if solution[i] == c:
                 hints[i] = "G"
-            elif c in self.solution:
+            elif c in solution:
                 hints[i] = "Y"
             else:
                 hints[i] = "B"

@@ -83,7 +83,7 @@ def draw_wins_losses(ax, results):
     title = f"Won {wins:.0f} of {total_games:.0f} games ({win_pct:.1f}%)"
     ax.set_title(title)
     ax.set_yticks([])
-    ax.set_xticks(range(0, total_games + 1, total_games // 10))
+    ax.set_xticks(range(0, total_games + 1, total_games // 10 if total_games > 10 else 1))
     # ax.set_xticks(x_ticks)
     # ax.set_xticklabels([])
     ax.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=total_games))
