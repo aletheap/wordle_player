@@ -39,7 +39,7 @@ class WordlePlayer:
         self.words = words
         self.freqs = freqs
         self.hints_tensor = hints
-        self.opening_word = str(opening_word)
+        self.opening_word = str(opening_word) if opening_word is not None else None
         self.all_guesses = []
         self.all_hints = []
 
@@ -84,24 +84,7 @@ class WordlePlayer:
         return True
 
     def _filter_words(self):
-        return [w for w in self.pre_calculated_hints["words"] if self._matches_all_regexes(w)]
-
-    # def _score_one_word(self, word):
-    #     freqs = defaultdict(float)
-    #     for solution in self.filtered_words:
-    #         result = ""
-    #         for i, letter in enumerate(word):
-    #             if letter == solution[i]:
-    #                 result += "G"
-    #             elif letter in solution:
-    #                 result += "Y"
-    #             else:
-    #                 result += "B"
-    #         freqs[result] += 1  # self.word_freqs[solution]
-    #     s = sum(freqs.values())
-    #     probs = [v / s for v in freqs.values()]
-    #     h = self._entropy(probs)
-    #     return h
+        return [w for w in self.words if self._matches_all_regexes(w)]
 
     def best_guess(self):
         if len(self.all_guesses) == 0 and self.opening_word is not None:
@@ -124,8 +107,12 @@ class WordlePlayer:
             axis=1
         )  # hint string distribution entropy for each possible guess word
 
-        # return the guess that maximizes entropy of hint string distribution
-        return words[np.argmax(h)]
+        # now we'll pick the most common word in the top 10% of entropies.
+        h_range = (h.max() - h.min()) / 10
+        h_cutoff = h.max() - h_range
+        high_entropy_words = words[h >= h_cutoff]
+        high_entropy_freqs = self.freqs[idx_filter][h >= h_cutoff]
+        return high_entropy_words[np.argmax(high_entropy_freqs)]
 
     def wrong_position(self, letter, position):
         letter = letter.lower()
@@ -199,12 +186,17 @@ class AutomatedTeam:
                 for i in range(num_games)
             ]
             finished = 0
-            with tqdm(total=num_games, unit="game(s)", smoothing=0) as pb:
+            with tqdm(total=num_games, unit="game(s)") as pb:
                 while finished < num_games:
                     new_finished = len([1 for x in r if x.ready()])
                     pb.update(new_finished - finished)
                     finished = new_finished
-            results = [x.get() for x in r]
+            results = []
+            for x in r:
+                try:
+                    results.append(x.get())
+                except Exception as e:
+                    print(f"Exception: {e}")
             with open(results_file, "w") as f:
                 json.dump(results, f)
 
@@ -259,20 +251,23 @@ class WordleHints:
         """Precalculate the hints for all possible guesses and solutions"""
         if cls.cache is None:
             if not os.path.exists(cls.cache_file + ".npz"):
-                word_freqs = sorted(list(load_word_freqs().items()))
+                _, wordle_valid_words, word_freqs = load_data()
+                word_freqs = [(k, v) for k, v in word_freqs.items() if k in wordle_valid_words]
+                word_freqs = sorted(word_freqs, key=lambda x: x[1], reverse=True)
                 words, freqs = list(zip(*word_freqs))
                 d = {
                     "words": np.array(words),
                     "freqs": np.array(freqs),
                     "hints": np.zeros((len(words), len(words)), dtype=np.uint8),
                 }
-                for i, guess in enumerate(tqdm(words, desc="pre-calculating hints")):
+                for i, guess in enumerate(tqdm(words, desc="pre-calculating hints", unit="pair")):
                     for j, solution in enumerate(words):
                         hints = WordleGame.calculate_hints(guess, solution)
                         d["hints"][i, j] = cls.hints_to_byte(hints)
                 print("calculating best first word (this will take a while)...")
                 dummy_player = WordlePlayer(**d)
                 opening_word = dummy_player.best_guess()
+                assert opening_word not in ("", None, "none")
                 print(f'best first word word: "{opening_word}"')
                 d["opening_word"] = np.array(opening_word)
                 print("saving pre-calculated hints to disk...")
