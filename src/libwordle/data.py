@@ -12,6 +12,7 @@ WORDLE_DATA_FILE = os.path.join(MY_DIR, "wordle_words.json")
 WORD_FREQS_DATA_FILE = os.path.join(MY_DIR, "unigram_freq.csv")
 WORDLE_START_DATE = datetime.date(2021, 6, 19)
 WORD_LENGTH = 5
+MAX_GUESSES = 6
 
 # Cache data to avoid reloading it
 CACHE = {
@@ -45,6 +46,13 @@ def load_word_freqs():
         with open(WORD_FREQS_DATA_FILE, "r") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
+
+        # NOTE: if a solution is not in the unigram_freqs dataset, it will never be guessed
+        # so we add any missing solutions here with a frequency count of 0
+        wordle_solutions, _ = load_wordle_data()
+        for solution in set(wordle_solutions) - set(row["word"] for row in rows):
+            rows.append({"word": solution, "count": 0})
+
         word_freqs = [
             (row["word"], int(row["count"])) for row in rows if len(row["word"]) == WORD_LENGTH
         ]

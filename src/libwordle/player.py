@@ -15,11 +15,9 @@ import time
 import numpy as np
 from tqdm import tqdm
 
-from libwordle.data import WORD_LENGTH, load_data, load_word_freqs, load_wordle_data
-from libwordle.game import WordleGame
-from libwordle.visualization import save_results, save_stats
-
-from .data import load_data
+from .data import MAX_GUESSES, load_data
+from .game import WordleGame
+from .visualization import save_results, save_stats
 
 
 class WordlePlayer:
@@ -31,7 +29,7 @@ class WordlePlayer:
     # black = "⬛"
     wordlen = 5
 
-    def __init__(self, words, freqs, hints, opening_word=None):
+    def __init__(self, words, freqs, hints, max_guesses=MAX_GUESSES, opening_word=None):
         # if word_freqs is None:
         #    _, _, word_freqs = load_data()
         # self.word_freqs = word_freqs
@@ -40,6 +38,7 @@ class WordlePlayer:
         self.freqs = freqs
         self.hints_tensor = hints
         self.opening_word = str(opening_word) if opening_word is not None else None
+        self.max_guesses = max_guesses
         self.all_guesses = []
         self.all_hints = []
 
@@ -110,6 +109,14 @@ class WordlePlayer:
         # now we'll pick the most common word in the top 10% of entropies.
         h_range = (h.max() - h.min()) / 10
         h_cutoff = h.max() - h_range
+
+        # # Now we're going to look for a popular word with high entropy.
+        # # earlier in the game we'll prioritize entropy and later we'll prioritize popularity.
+        # completed_guesses = len(self.all_guesses)
+        # entropy_priority = 1 - (completed_guesses / self.max_guesses)
+        # h_cutoff = ((h.max() - h.min()) * entropy_priority) + h.min()
+
+        # now we'll pick the most common word with entropy above the cutoff
         high_entropy_words = words[h >= h_cutoff]
         high_entropy_freqs = self.freqs[idx_filter][h >= h_cutoff]
         return high_entropy_words[np.argmax(high_entropy_freqs)]
@@ -167,15 +174,21 @@ class AutomatedTeam:
         save_grids=True,  # if True, save grids to output_dir
         num_threads=None,  # defaults to all available cores
         max_games=3000,  # max number of games to play
+        wordle_number=None,  # play a single wordle game
     ) -> None:
         """Play all possible Wordle games using multiple processor cores,
         and print stats on the progress and results. Also saves the results
         to a JSON file and produces a plot of the results."""
 
         solutions, valid_words, word_freqs = load_data()
-        precalculated_hints = WordleHints.precalulate_all_hints()
+        precalculated_hints = WordleHints.load()
         results_file = os.path.join(output_dir, "results.json")
         num_games = min(len(solutions), max_games)
+        if wordle_number is not None:
+            games = [wordle_number]
+            num_games = 1
+        else:
+            games = list(range(num_games))
 
         with mp.Pool(num_threads) as p:
             r = [
@@ -183,7 +196,7 @@ class AutomatedTeam:
                     cls.play_one_game,
                     (i, solutions, valid_words, precalculated_hints),
                 )
-                for i in range(num_games)
+                for i in games
             ]
             finished = 0
             with tqdm(total=num_games, unit="game(s)") as pb:
@@ -247,7 +260,7 @@ class WordleHints:
         pass
 
     @classmethod
-    def precalulate_all_hints(cls):
+    def load(cls):
         """Precalculate the hints for all possible guesses and solutions"""
         if cls.cache is None:
             if not os.path.exists(cls.cache_file + ".npz"):
@@ -260,7 +273,7 @@ class WordleHints:
                     "freqs": np.array(freqs),
                     "hints": np.zeros((len(words), len(words)), dtype=np.uint8),
                 }
-                for i, guess in enumerate(tqdm(words, desc="pre-calculating hints", unit="pair")):
+                for i, guess in enumerate(tqdm(words, desc="pre-calculating hints", unit="hints")):
                     for j, solution in enumerate(words):
                         hints = WordleGame.calculate_hints(guess, solution)
                         d["hints"][i, j] = cls.hints_to_byte(hints)

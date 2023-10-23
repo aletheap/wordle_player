@@ -3,22 +3,18 @@
 from typing import Optional
 
 import fire
+
 from libwordle.data import load_word_freqs
-from libwordle.player import WordlePlayer
+from libwordle.player import WordleHints, WordlePlayer
 
 # Use load_datafiles to load the data
 # and create a WordlePlayer object
 # to play the game.
 
 
-def play(
-    max_vocab_size: Optional[int] = None,
-):
-    if max_vocab_size is None:
-        p = WordlePlayer()
-    else:
-        word_freqs = load_word_freqs(max_vocab_size=max_vocab_size)
-        p = WordlePlayer(word_freqs=word_freqs)
+def play():
+    pre_calculated_hints = WordleHints.load()
+    p = WordlePlayer(**pre_calculated_hints)
     n_guesses = 0
     while not p.won:
         next_best_guess = p.best_guess().upper()

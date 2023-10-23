@@ -7,13 +7,13 @@ import string
 import colors
 import numpy as np
 
-from .data import WORD_LENGTH, WORDLE_START_DATE, load_data
+from .data import MAX_GUESSES, WORD_LENGTH, WORDLE_START_DATE, load_data
 
 
 class WordleGame:
     """The back end for a game of Wordle"""
 
-    def __init__(self, wordle_number=None, random_word=False, word_data=None, max_guesses=6):
+    def __init__(self, wordle_number=None, random_word=False, word_data=None, max_guesses=MAX_GUESSES):
         assert not (
             bool(wordle_number) and bool(random_word)
         ), "cannot specify both wordle_number and random_word"
@@ -45,7 +45,7 @@ class WordleGame:
         self.won = False
         self.is_finished = False
         self.all_guesses = []
-        self.max_guesses = max_guesses
+        self.max_guesses = MAX_GUESSES
 
     def guess(self, word):
         """Guess a word and return the hints"""
